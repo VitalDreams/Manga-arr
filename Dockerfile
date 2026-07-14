@@ -4,6 +4,7 @@ WORKDIR /src
 
 # Copy everything
 COPY src/ src/
+COPY Logo/ Logo/
 
 # Restore (ignore NuGet vulnerability warnings)
 WORKDIR /src/src
