@@ -23,10 +23,10 @@ services:
       - Paths__DownloadCache=/tmp/manga-arr
       - Paths__Logs=/config/logs
     networks:
-      - media
+      - media-stack_media
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
 networks:
-  media:
+  media-stack_media:
     external: true
