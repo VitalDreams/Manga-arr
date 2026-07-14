@@ -18,6 +18,7 @@ using NzbDrone.Core.Extras.Metadata.Files;
 using NzbDrone.Core.Extras.Others;
 using NzbDrone.Core.History;
 using NzbDrone.Core.Http;
+using NzbDrone.Core.Manga;
 using NzbDrone.Core.ImportLists;
 using NzbDrone.Core.ImportLists.Exclusions;
 using NzbDrone.Core.Indexers;
@@ -187,6 +188,12 @@ namespace NzbDrone.Core.Datastore
 
             Mapper.Entity<Blocklist>("Blocklist").RegisterModel();
             Mapper.Entity<MetadataFile>("MetadataFiles").RegisterModel();
+
+            // Manga entities
+            Mapper.Entity<MangaMetadata>("MangaMetadata").RegisterModel();
+
+            Mapper.Entity<MangaSeries>("MangaSeries").RegisterModel()
+                .HasOne(s => s.Metadata, s => s.MangaMetadataId);
             Mapper.Entity<OtherExtraFile>("ExtraFiles").RegisterModel();
 
             Mapper.Entity<PendingRelease>("PendingReleases").RegisterModel()
