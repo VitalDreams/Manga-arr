@@ -17,6 +17,7 @@ RUN dotnet msbuild -restore Readarr.sln \
     -t:PublishAllRids \
     -p:TreatWarningsAsErrors=false \
     -p:EnableSentryRelease=false \
+    -p:SentryUploadSymbols=false \
     -nowarn:NU1902,NU1903,SA1600,SA1309,SA1101,SA1202,SA1633
 
 # Runtime stage
