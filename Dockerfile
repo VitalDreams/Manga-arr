@@ -5,15 +5,16 @@ WORKDIR /src
 # Copy everything
 COPY src/ src/
 COPY Logo/ Logo/
-COPY build.sh ./
 
-# Restore and build using Readarr's actual build system
-WORKDIR /src
-RUN chmod +x build.sh && \
-    export READARRVERSION="0.1.0" && \
-    export RID="linux-x64" && \
-    export FRAMEWORK="net6.0" && \
-    bash build.sh
+# Build using Readarr's msbuild approach (PublishAllRids handles all platform assemblies)
+WORKDIR /src/src
+RUN dotnet msbuild -restore Readarr.sln \
+    -p:Configuration=Release \
+    -p:Platform=Posix \
+    -p:RuntimeIdentifiers=linux-x64 \
+    -t:PublishAllRids \
+    -p:TreatWarningsAsErrors=false \
+    -nowarn:NU1902,NU1903
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS runtime
@@ -29,7 +30,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN mkdir -p /config /config/logs /manga /tmp/manga-arr
 
 # Copy build output
-COPY --from=build /src/_output/Readarr/. /app/
+COPY --from=build /src/src/_output/Readarr/. /app/
 
 # Expose port (8192 to avoid conflict with Sonarr on 8989)
 EXPOSE 8192
