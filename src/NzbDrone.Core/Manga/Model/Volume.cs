@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Text.Json.Serialization;
 using Equ;
 using NzbDrone.Common.Extensions;
+using NzbDrone.Core.Books;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.MediaFiles;
 

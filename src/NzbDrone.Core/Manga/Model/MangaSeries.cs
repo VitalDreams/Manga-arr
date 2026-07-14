@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using Equ;
 using NzbDrone.Common.Extensions;
+using NzbDrone.Core.Books;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Profiles.Metadata;
+using NzbDrone.Core.Profiles.Qualities;
 
 namespace NzbDrone.Core.Manga
 {

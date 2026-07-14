@@ -6,7 +6,7 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Disk;
-using NzbDrone.Core.Http;
+using NzbDrone.Common.Http;
 using NzbDrone.Core.Manga.Connectors;
 
 namespace NzbDrone.Core.Manga

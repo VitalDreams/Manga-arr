@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using NzbDrone.Core.Books;
 using NzbDrone.Core.Datastore;
 
 namespace NzbDrone.Core.Manga

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Equ;
 using NzbDrone.Common.Extensions;
+using NzbDrone.Core.Books;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.MediaFiles;
 

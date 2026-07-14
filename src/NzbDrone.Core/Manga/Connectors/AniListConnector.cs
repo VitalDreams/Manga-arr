@@ -6,7 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using NzbDrone.Core.Http;
+using NzbDrone.Common.Http;
 
 namespace NzbDrone.Core.Manga.Connectors
 {
