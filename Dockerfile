@@ -5,13 +5,15 @@ WORKDIR /src
 # Copy everything
 COPY src/ src/
 COPY Logo/ Logo/
+COPY build.sh ./
 
-# Restore (ignore NuGet vulnerability warnings)
-WORKDIR /src/src
-RUN dotnet restore Readarr.sln /p:TreatWarningsAsErrors=false -nowarn:NU1902,NU1903
-
-# Build the Console project (actual entry point)
-RUN dotnet publish NzbDrone.Console/Readarr.Console.csproj -c Release -f net6.0 --self-contained false -o /app/publish --no-restore /p:TreatWarningsAsErrors=false -nowarn:NU1902,NU1903
+# Restore and build using Readarr's actual build system
+WORKDIR /src
+RUN chmod +x build.sh && \
+    export READARRVERSION="0.1.0" && \
+    export RID="linux-x64" && \
+    export FRAMEWORK="net6.0" && \
+    bash build.sh
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS runtime
@@ -26,8 +28,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Create directories
 RUN mkdir -p /config /config/logs /manga /tmp/manga-arr
 
-# Copy build
-COPY --from=build /app/publish .
+# Copy build output
+COPY --from=build /src/_output/Readarr/. /app/
 
 # Expose port (8192 to avoid conflict with Sonarr on 8989)
 EXPOSE 8192
