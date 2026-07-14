@@ -6,15 +6,18 @@ WORKDIR /src
 COPY src/ src/
 COPY Logo/ Logo/
 
-# Build using Readarr's msbuild approach (PublishAllRids handles all platform assemblies)
+# Build using Readarr's msbuild approach
 WORKDIR /src/src
+ENV SENTRY_SKIP_RELEASE=true
+ENV SENTRY_AUTH_TOKEN=
 RUN dotnet msbuild -restore Readarr.sln \
     -p:Configuration=Release \
     -p:Platform=Posix \
     -p:RuntimeIdentifiers=linux-x64 \
     -t:PublishAllRids \
     -p:TreatWarningsAsErrors=false \
-    -nowarn:NU1902,NU1903
+    -p:EnableSentryRelease=false \
+    -nowarn:NU1902,NU1903,SA1600,SA1309,SA1101,SA1202,SA1633
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS runtime
