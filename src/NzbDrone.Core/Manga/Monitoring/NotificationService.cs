@@ -18,13 +18,12 @@ namespace NzbDrone.Core.Manga.Monitoring
 
     public class NotificationService : INotificationService
     {
-        private readonly IHttpClient _httpClient;
+        private static readonly HttpClient _httpClient = new HttpClient();
         private readonly Logger _logger;
         private NotificationSettings _settings;
 
-        public NotificationService(IHttpClient httpClient, Logger logger)
+        public NotificationService(Logger logger)
         {
-            _httpClient = httpClient;
             _logger = logger;
             _settings = new NotificationSettings();
         }
@@ -35,25 +34,21 @@ namespace NzbDrone.Core.Manga.Monitoring
 
             var tasks = new List<Task>();
 
-            // Discord webhook
             if (!string.IsNullOrEmpty(_settings.DiscordWebhookUrl))
             {
                 tasks.Add(SendDiscordAsync(notification));
             }
 
-            // Gotify
             if (!string.IsNullOrEmpty(_settings.GotifyUrl))
             {
                 tasks.Add(SendGotifyAsync(notification));
             }
 
-            // Ntfy
             if (!string.IsNullOrEmpty(_settings.NtfyTopic))
             {
                 tasks.Add(SendNtfyAsync(notification));
             }
 
-            // Webhook (generic)
             if (!string.IsNullOrEmpty(_settings.WebhookUrl))
             {
                 tasks.Add(SendWebhookAsync(notification));
@@ -119,17 +114,14 @@ namespace NzbDrone.Core.Manga.Monitoring
                             title = notification.Title,
                             description = notification.Message,
                             color = GetColor(notification.Type),
-                            timestamp = DateTime.UtcNow.ToString("o"),
-                            fields = notification.Data != null
-                                ? new[] { new { name = "Details", value = JsonSerializer.Serialize(notification.Data), inline = false } }
-                                : null
+                            timestamp = DateTime.UtcNow.ToString("o")
                         }
                     }
                 };
 
                 var json = JsonSerializer.Serialize(embed);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
-                await _httpClient.PostAsync(new HttpRequestBuilder(_settings.DiscordWebhookUrl).Build());
+                await _httpClient.PostAsync(_settings.DiscordWebhookUrl, content);
             }
             catch (Exception ex)
             {
@@ -151,7 +143,7 @@ namespace NzbDrone.Core.Manga.Monitoring
 
                 var json = JsonSerializer.Serialize(payload);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
-                await _httpClient.PostAsync(new HttpRequestBuilder(url).Build());
+                await _httpClient.PostAsync(url, content);
             }
             catch (Exception ex)
             {
@@ -174,7 +166,7 @@ namespace NzbDrone.Core.Manga.Monitoring
 
                 var json = JsonSerializer.Serialize(payload);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
-                await _httpClient.PostAsync(new HttpRequestBuilder(url).Build());
+                await _httpClient.PostAsync(url, content);
             }
             catch (Exception ex)
             {
@@ -197,7 +189,7 @@ namespace NzbDrone.Core.Manga.Monitoring
 
                 var json = JsonSerializer.Serialize(payload);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
-                await _httpClient.PostAsync(new HttpRequestBuilder(_settings.WebhookUrl).Build());
+                await _httpClient.PostAsync(_settings.WebhookUrl, content);
             }
             catch (Exception ex)
             {
@@ -209,11 +201,11 @@ namespace NzbDrone.Core.Manga.Monitoring
         {
             return type switch
             {
-                NotificationType.Download => 0x2ecc71, // Green
-                NotificationType.Error => 0xe74c3c,     // Red
-                NotificationType.Warning => 0xf39c12,   // Yellow
-                NotificationType.Info => 0x3498db,      // Blue
-                _ => 0x95a5a6                           // Gray
+                NotificationType.Download => 0x2ecc71,
+                NotificationType.Error => 0xe74c3c,
+                NotificationType.Warning => 0xf39c12,
+                NotificationType.Info => 0x3498db,
+                _ => 0x95a5a6
             };
         }
 
