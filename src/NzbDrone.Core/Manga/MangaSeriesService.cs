@@ -36,7 +36,7 @@ namespace NzbDrone.Core.Manga
 
         public List<MangaSeries> GetAllSeries()
         {
-            return _seriesRepository.All();
+            return _seriesRepository.All().ToList();
         }
 
         public MangaSeries AddSeries(MangaSeries newSeries)
