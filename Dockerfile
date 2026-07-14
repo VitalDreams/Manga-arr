@@ -11,7 +11,7 @@ WORKDIR /src/src
 RUN dotnet restore Readarr.sln /p:TreatWarningsAsErrors=false -nowarn:NU1902,NU1903
 
 # Build
-RUN dotnet publish NzbDrone.Host/Readarr.Host.csproj -c Release -f net6.0 -o /app/publish --no-restore /p:TreatWarningsAsErrors=false -nowarn:NU1902,NU1903
+RUN dotnet publish NzbDrone.Host/Readarr.Host.csproj -c Release -f net6.0 --self-contained false -o /app/publish --no-restore /p:TreatWarningsAsErrors=false -nowarn:NU1902,NU1903
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS runtime
