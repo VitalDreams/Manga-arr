@@ -1,0 +1,16 @@
+using System;
+
+namespace NzbDrone.Core.Manga
+{
+    public class MangaFile
+    {
+        public int Id { get; set; }
+        public int VolumeId { get; set; }
+        public int MangaSeriesId { get; set; }
+        public string Path { get; set; }
+        public string FileName { get; set; }
+        public string RelativePath { get; set; }
+        public long Size { get; set; }
+        public DateTime AddedAt { get; set; } = DateTime.UtcNow;
+    }
+}

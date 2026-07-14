@@ -13,11 +13,11 @@ namespace NzbDrone.Core.Manga.Connectors
     public class AniListConnector : IMangaMetadataConnector
     {
         private readonly IHttpClient _httpClient;
-        private const string BaseUrl = "https://graphql.anilist.co";
+        private const string AniListApiUrl = "https://graphql.anilist.co";
         private const int RateLimitDelayMs = 600;
 
         public string Name => "AniList";
-        public string BaseUrl => BaseUrl;
+        public string BaseUrl => AniListApiUrl;
         public bool Enabled { get; set; } = true;
 
         public AniListConnector(IHttpClient httpClient)
