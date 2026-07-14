@@ -4,13 +4,12 @@ services:
     container_name: mangaarr
     restart: unless-stopped
     ports:
-      - "8192:8192"
+      - "8192:8787"
     volumes:
       - /opt/containers/media-stack/config/mangaarr:/config
       - /mnt/media/Manga:/manga
     environment:
       - TZ=America/Chicago
-      - ASPNETCORE_URLS=http://+:8192
       - Database__Path=/config/mangaarr.db
       - MangaDex__BaseUrl=https://api.mangadex.org
       - MangaDex__Language=en
