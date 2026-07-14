@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.Manga;
@@ -45,23 +46,24 @@ namespace Readarr.Api.V1.Manga
         [Produces("application/json")]
         public object LookupManga([FromQuery] string term)
         {
-            // Search MangaDex for manga
-            // This will be wired to MangaDexConnector later
+            // Search MangaDex for manga — will be wired to MangaDexConnector later
             return new List<object>();
         }
 
         [RestPostById]
-        public ActionResult<MangaResource> AddManga(MangaResource mangaResource)
+        public ActionResult<MangaResource> AddManga([FromBody] MangaResource mangaResource)
         {
             var series = _mangaService.AddSeries(mangaResource.ToModel());
             return Created(series.Id);
         }
 
         [RestPutById]
-        public ActionResult<MangaResource> UpdateManga(MangaResource mangaResource)
+        public ActionResult<MangaResource> UpdateManga([FromBody] MangaResource mangaResource)
         {
             var existing = _mangaService.GetSeries(mangaResource.Id);
-            var model = mangaResource.ToModel(existing);
+            var model = mangaResource.ToModel();
+            model.Id = existing.Id;
+            model.Added = existing.Added;
             _mangaService.UpdateSeries(model);
             BroadcastResourceChange(ModelAction.Updated, mangaResource);
             return Accepted(mangaResource.Id);
