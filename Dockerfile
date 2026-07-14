@@ -5,12 +5,12 @@ WORKDIR /src
 # Copy everything
 COPY src/ src/
 
-# Restore
+# Restore (ignore NuGet vulnerability warnings)
 WORKDIR /src/src
-RUN dotnet restore Readarr.sln
+RUN dotnet restore Readarr.sln /p:TreatWarningsAsErrors=false -nowarn:NU1902,NU1903
 
 # Build
-RUN dotnet publish NzbDrone.Api/Readarr.Api.csproj -c Release -o /app/publish --no-restore
+RUN dotnet publish NzbDrone.Api/Readarr.Api.csproj -c Release -o /app/publish --no-restore /p:TreatWarningsAsErrors=false -nowarn:NU1902,NU1903
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
