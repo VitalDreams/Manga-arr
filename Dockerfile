@@ -30,7 +30,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN mkdir -p /config /config/logs /manga /tmp/manga-arr
 
 # Copy build output
-COPY --from=build /src/src/_output/Readarr/. /app/
+COPY --from=build /src/_output/net6.0/linux-x64/. /app/
 
 # Expose port (8192 to avoid conflict with Sonarr on 8989)
 EXPOSE 8192
