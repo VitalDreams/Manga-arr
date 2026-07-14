@@ -7,6 +7,7 @@ COPY src/ src/
 COPY Logo/ Logo/
 COPY frontend/ frontend/
 COPY package.json yarn.lock ./
+COPY tsconfig.json ./
 
 # Install Node.js for frontend build
 RUN apt-get update && apt-get install -y --no-install-recommends \
