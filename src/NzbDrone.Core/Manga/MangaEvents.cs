@@ -1,4 +1,4 @@
-using NzbDrone.Core.Messaging.Events;
+using NzbDrone.Common.Messaging;
 
 namespace NzbDrone.Core.Manga
 {
