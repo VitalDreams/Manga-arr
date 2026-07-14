@@ -10,7 +10,7 @@ WORKDIR /src/src
 RUN dotnet restore Readarr.sln /p:TreatWarningsAsErrors=false -nowarn:NU1902,NU1903
 
 # Build
-RUN dotnet publish NzbDrone.Api/Readarr.Api.csproj -c Release -o /app/publish --no-restore /p:TreatWarningsAsErrors=false -nowarn:NU1902,NU1903
+RUN dotnet publish NzbDrone.Host/Readarr.Host.csproj -c Release -o /app/publish --no-restore /p:TreatWarningsAsErrors=false -nowarn:NU1902,NU1903
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
@@ -36,4 +36,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:8192/api/v3/health || exit 1
 
 # Run
-ENTRYPOINT ["dotnet", "Readarr.Api.dll"]
+ENTRYPOINT ["dotnet", "Readarr.Host.dll"]
