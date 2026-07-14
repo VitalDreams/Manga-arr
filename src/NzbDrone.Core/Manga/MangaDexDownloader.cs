@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Text.Json;
 using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Disk;
-using NzbDrone.Common.Http;
 using NzbDrone.Core.Manga.Connectors;
 
 namespace NzbDrone.Core.Manga
@@ -21,32 +21,26 @@ namespace NzbDrone.Core.Manga
     {
         private readonly IMangaMetadataConnector _connector;
         private readonly ICbzCreator _cbzCreator;
-        private readonly IHttpClient _httpClient;
+        private static readonly HttpClient _httpClient = new HttpClient();
         private readonly IDiskProvider _diskProvider;
         private readonly Logger _logger;
 
         public MangaDexDownloader(
             IMangaMetadataConnector connector,
             ICbzCreator cbzCreator,
-            IHttpClient httpClient,
             IDiskProvider diskProvider,
             Logger logger)
         {
             _connector = connector;
             _cbzCreator = cbzCreator;
-            _httpClient = httpClient;
             _diskProvider = diskProvider;
             _logger = logger;
         }
 
-        /// <summary>
-        /// Download all chapters in a volume as a single CBZ
-        /// </summary>
         public async Task<string> DownloadVolumeAsync(string outputDir, MangaSeries series, Volume volume)
         {
             _logger.Info($"Downloading volume {volume.VolumeNumber} of {series.Name}...");
 
-            // Get chapters for this volume
             var chapters = await _connector.GetChaptersForVolumeAsync(series.ForeignMangaId, volume.VolumeNumber);
 
             if (!chapters.Any())
@@ -57,7 +51,6 @@ namespace NzbDrone.Core.Manga
 
             _logger.Info($"Found {chapters.Count} chapters in volume {volume.VolumeNumber}");
 
-            // Download all chapter pages
             var chapterImages = new Dictionary<Chapter, List<string>>();
             var tempDir = Path.Combine(Path.GetTempPath(), "manga-arr", series.ForeignMangaId, $"vol-{volume.VolumeNumber}");
 
@@ -70,7 +63,6 @@ namespace NzbDrone.Core.Manga
                     var pages = await _connector.GetChapterPagesAsync(chapterInfo.ForeignChapterId);
                     var imagePaths = await DownloadPagesAsync(tempDir, chapterInfo.ChapterNumber, pages);
 
-                    // Create a Chapter object for the CBZ creator
                     var chapter = new Chapter
                     {
                         ForeignChapterId = chapterInfo.ForeignChapterId,
@@ -83,7 +75,6 @@ namespace NzbDrone.Core.Manga
                     chapterImages[chapter] = imagePaths;
                 }
 
-                // Create CBZ with all chapters merged
                 var cbzPath = await _cbzCreator.CreateCbzFromVolumeAsync(outputDir, series, volume, chapterImages);
                 _logger.Info($"Created CBZ: {cbzPath}");
 
@@ -91,7 +82,6 @@ namespace NzbDrone.Core.Manga
             }
             finally
             {
-                // Cleanup temp files
                 if (_diskProvider.FolderExists(tempDir))
                 {
                     _diskProvider.DeleteFolder(tempDir, true);
@@ -99,9 +89,6 @@ namespace NzbDrone.Core.Manga
             }
         }
 
-        /// <summary>
-        /// Download a single chapter as a CBZ
-        /// </summary>
         public async Task<string> DownloadChapterAsync(string outputDir, MangaSeries series, Volume volume, Chapter chapter)
         {
             _logger.Info($"Downloading chapter {chapter.ChapterNumber} of {series.Name} volume {volume.VolumeNumber}...");
@@ -143,8 +130,8 @@ namespace NzbDrone.Core.Manga
 
                 try
                 {
-                    var request = new HttpRequestBuilder(url).Build();
-                    var response = await _httpClient.GetAsync(request);
+                    var response = await _httpClient.GetAsync(url);
+                    response.EnsureSuccessStatusCode();
 
                     using (var fileStream = new FileStream(filePath, FileMode.Create))
                     {

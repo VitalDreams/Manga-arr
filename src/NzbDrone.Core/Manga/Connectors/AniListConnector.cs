@@ -6,24 +6,18 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using NzbDrone.Common.Http;
 
 namespace NzbDrone.Core.Manga.Connectors
 {
     public class AniListConnector : IMangaMetadataConnector
     {
-        private readonly IHttpClient _httpClient;
+        private static readonly HttpClient _httpClient = new HttpClient();
         private const string AniListApiUrl = "https://graphql.anilist.co";
         private const int RateLimitDelayMs = 600;
 
         public string Name => "AniList";
         public string BaseUrl => AniListApiUrl;
         public bool Enabled { get; set; } = true;
-
-        public AniListConnector(IHttpClient httpClient)
-        {
-            _httpClient = httpClient;
-        }
 
         public async Task<List<MangaSearchResult>> SearchAsync(string query, int limit = 10)
         {
@@ -59,10 +53,10 @@ namespace NzbDrone.Core.Manga.Connectors
                 ForeignMangaId = $"anilist-{m.Id}",
                 Title = m.Title?.English ?? m.Title?.Romaji ?? m.Title?.Native,
                 Description = CleanDescription(m.Description),
-                Author = m.Staff?.FirstOrDefault()?.Node?.Name?.Full,
-                Artist = null, // AniList doesn't separate author/artist well
+                Author = m.Staff?.Edges?.FirstOrDefault()?.Node?.Name?.Full,
+                Artist = null,
                 Status = MapStatus(m.Status),
-                Demographic = null, // AniList uses format, not demographic
+                Demographic = null,
                 Year = m.StartDate?.Year ?? 0,
                 CoverUrl = m.CoverImage?.Large ?? m.CoverImage?.Medium,
                 Genres = m.Genres?.ToList() ?? new List<string>(),
@@ -101,12 +95,6 @@ namespace NzbDrone.Core.Manga.Connectors
                         staff(edges: { role: WRITER }) {
                             node { name { full } }
                         }
-                        relations {
-                            edges { relationType node { id title { romaji english } type format } }
-                        }
-                        recommendations(perPage: 5) {
-                            edges { node { mediaRecommendation { id title { romaji english } coverImage { medium } } } }
-                        }
                     }
                 }";
 
@@ -121,7 +109,7 @@ namespace NzbDrone.Core.Manga.Connectors
                 ForeignMangaId = $"anilist-{m.Id}",
                 Title = m.Title?.English ?? m.Title?.Romaji ?? m.Title?.Native,
                 Description = CleanDescription(m.Description),
-                Author = m.Staff?.FirstOrDefault()?.Node?.Name?.Full,
+                Author = m.Staff?.Edges?.FirstOrDefault()?.Node?.Name?.Full,
                 Artist = null,
                 Status = MapStatus(m.Status),
                 ContentRating = null,
@@ -137,8 +125,6 @@ namespace NzbDrone.Core.Manga.Connectors
 
         public Task<VolumeChapterMap> GetVolumeChapterMapAsync(string foreignMangaId)
         {
-            // AniList doesn't provide volume-to-chapter mapping
-            // This is handled by MangaDex
             return Task.FromResult(new VolumeChapterMap
             {
                 ForeignMangaId = foreignMangaId,
@@ -148,15 +134,11 @@ namespace NzbDrone.Core.Manga.Connectors
 
         public Task<List<ChapterInfo>> GetChaptersForVolumeAsync(string foreignMangaId, int volumeNumber)
         {
-            // AniList doesn't provide chapter data
-            // This is handled by MangaDex
             return Task.FromResult(new List<ChapterInfo>());
         }
 
         public Task<ChapterPages> GetChapterPagesAsync(string foreignChapterId)
         {
-            // AniList doesn't provide page data
-            // This is handled by MangaDex
             return Task.FromResult(new ChapterPages());
         }
 
@@ -171,22 +153,15 @@ namespace NzbDrone.Core.Manga.Connectors
             await Task.Delay(RateLimitDelayMs);
 
             var body = JsonSerializer.Serialize(new { query, variables });
-            var request = new HttpRequestBuilder(BaseUrl)
-                .SetHeader("Content-Type", "application/json")
-                .SetHeader("Accept", "application/json")
-                .Build();
-
-            request.Method = HttpMethod.Post;
-            request.Content = new StringContent(body, Encoding.UTF8, "application/json");
-
-            var response = await _httpClient.ExecuteAsync(request);
-            return JsonSerializer.Deserialize<T>(response.Content);
+            var content = new StringContent(body, Encoding.UTF8, "application/json");
+            var response = await _httpClient.PostAsync(AniListApiUrl, content);
+            var responseString = await response.Content.ReadAsStringAsync();
+            return JsonSerializer.Deserialize<T>(responseString);
         }
 
         private string CleanDescription(string description)
         {
             if (string.IsNullOrEmpty(description)) return description;
-            // Remove HTML tags and spoiler tags
             var clean = System.Text.RegularExpressions.Regex.Replace(description, "<[^>]+>", "");
             clean = System.Text.RegularExpressions.Regex.Replace(clean, "\\(spoiler\\)", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             return clean.Trim();
@@ -206,7 +181,7 @@ namespace NzbDrone.Core.Manga.Connectors
         }
     }
 
-    // AniList GraphQL response models
+    // Response models
     public class AniListPageResponse
     {
         [JsonPropertyName("data")]
@@ -241,73 +216,48 @@ namespace NzbDrone.Core.Manga.Connectors
     {
         [JsonPropertyName("id")]
         public int Id { get; set; }
-
         [JsonPropertyName("title")]
         public AniListTitle Title { get; set; }
-
         [JsonPropertyName("description")]
         public string Description { get; set; }
-
         [JsonPropertyName("status")]
         public string Status { get; set; }
-
         [JsonPropertyName("format")]
         public string Format { get; set; }
-
         [JsonPropertyName("startDate")]
         public AniListDate StartDate { get; set; }
-
         [JsonPropertyName("endDate")]
         public AniListDate EndDate { get; set; }
-
         [JsonPropertyName("coverImage")]
         public AniListCoverImage CoverImage { get; set; }
-
         [JsonPropertyName("bannerImage")]
         public string BannerImage { get; set; }
-
         [JsonPropertyName("genres")]
         public List<string> Genres { get; set; }
-
         [JsonPropertyName("tags")]
         public List<AniListTag> Tags { get; set; }
-
         [JsonPropertyName("meanScore")]
         public int? MeanScore { get; set; }
-
         [JsonPropertyName("popularity")]
         public int? Popularity { get; set; }
-
         [JsonPropertyName("favourites")]
         public int? Favourites { get; set; }
-
         [JsonPropertyName("chapters")]
         public int? Chapters { get; set; }
-
         [JsonPropertyName("volumes")]
         public int? Volumes { get; set; }
-
         [JsonPropertyName("source")]
         public string Source { get; set; }
-
         [JsonPropertyName("staff")]
         public AniListStaffConnection Staff { get; set; }
-
-        [JsonPropertyName("relations")]
-        public AniListRelationConnection Relations { get; set; }
-
-        [JsonPropertyName("recommendations")]
-        public AniListRecommendationConnection Recommendations { get; set; }
     }
 
     public class AniListTitle
     {
         [JsonPropertyName("romaji")]
         public string Romaji { get; set; }
-
         [JsonPropertyName("english")]
         public string English { get; set; }
-
         [JsonPropertyName("native")]
         public string Native { get; set; }
     }
@@ -316,10 +266,8 @@ namespace NzbDrone.Core.Manga.Connectors
     {
         [JsonPropertyName("year")]
         public int? Year { get; set; }
-
         [JsonPropertyName("month")]
         public int? Month { get; set; }
-
         [JsonPropertyName("day")]
         public int? Day { get; set; }
     }
@@ -328,10 +276,8 @@ namespace NzbDrone.Core.Manga.Connectors
     {
         [JsonPropertyName("large")]
         public string Large { get; set; }
-
         [JsonPropertyName("medium")]
         public string Medium { get; set; }
-
         [JsonPropertyName("extraLarge")]
         public string ExtraLarge { get; set; }
     }
@@ -340,7 +286,6 @@ namespace NzbDrone.Core.Manga.Connectors
     {
         [JsonPropertyName("name")]
         public string Name { get; set; }
-
         [JsonPropertyName("isGeneralSpoiler")]
         public bool IsGeneralSpoiler { get; set; }
     }
@@ -355,7 +300,6 @@ namespace NzbDrone.Core.Manga.Connectors
     {
         [JsonPropertyName("role")]
         public string Role { get; set; }
-
         [JsonPropertyName("node")]
         public AniListStaff Node { get; set; }
     }
@@ -370,53 +314,5 @@ namespace NzbDrone.Core.Manga.Connectors
     {
         [JsonPropertyName("full")]
         public string Full { get; set; }
-    }
-
-    public class AniListRelationConnection
-    {
-        [JsonPropertyName("edges")]
-        public List<AniListRelationEdge> Edges { get; set; }
-    }
-
-    public class AniListRelationEdge
-    {
-        [JsonPropertyName("relationType")]
-        public string RelationType { get; set; }
-
-        [JsonPropertyName("node")]
-        public AniListRelationNode Node { get; set; }
-    }
-
-    public class AniListRelationNode
-    {
-        [JsonPropertyName("id")]
-        public int Id { get; set; }
-
-        [JsonPropertyName("title")]
-        public AniListTitle Title { get; set; }
-
-        [JsonPropertyName("type")]
-        public string Type { get; set; }
-
-        [JsonPropertyName("format")]
-        public string Format { get; set; }
-    }
-
-    public class AniListRecommendationConnection
-    {
-        [JsonPropertyName("edges")]
-        public List<AniListRecommendationEdge> Edges { get; set; }
-    }
-
-    public class AniListRecommendationEdge
-    {
-        [JsonPropertyName("node")]
-        public AniListRecommendationNode Node { get; set; }
-    }
-
-    public class AniListRecommendationNode
-    {
-        [JsonPropertyName("mediaRecommendation")]
-        public AniListMedia MediaRecommendation { get; set; }
     }
 }

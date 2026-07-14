@@ -46,8 +46,8 @@ namespace NzbDrone.Core.Manga
         [MemberwiseEqualityIgnore]
         public string Name
         {
-            get { return Metadata.Value.Name; }
-            set { Metadata.Value.Name = value; }
+            get { return Metadata.Value.Title; }
+            set { Metadata.Value.Title = value; }
         }
 
         [MemberwiseEqualityIgnore]
@@ -59,7 +59,7 @@ namespace NzbDrone.Core.Manga
 
         public override string ToString()
         {
-            return string.Format("[{0}][{1}]", Metadata.Value.ForeignMangaId.NullSafe(), Metadata.Value.Name.NullSafe());
+            return string.Format("[{0}][{1}]", Metadata.Value.ForeignMangaId.NullSafe(), Metadata.Value.Title.NullSafe());
         }
 
         public override void UseMetadataFrom(MangaSeries other)

@@ -121,7 +121,7 @@ namespace NzbDrone.Core.Manga.Monitoring
                 return;
             }
 
-            _logger.Info($"Found {newVolumes.Count} new volumes for {manga.Title}: {string.Join(", ", newVolumes)}");
+            _logger.Info($"Found {newVolumes.Count} new volumes for {manga.Title}: {string.Join(", ", newVolumes.ToArray())}");
 
             // Auto-download new volumes
             foreach (var volumeNumber in newVolumes)

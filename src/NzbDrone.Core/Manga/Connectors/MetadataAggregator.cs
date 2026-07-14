@@ -1,3 +1,5 @@
+using System.Linq;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -14,6 +16,7 @@ namespace NzbDrone.Core.Manga.Connectors
     {
         Task<List<MangaSearchResult>> SearchAsync(string query, int limit = 10);
         Task<MangaMetadata> GetEnrichedMetadataAsync(string mangadexId);
+        Task<VolumeChapterMap> GetVolumeChapterMapAsync(string mangadexId);
     }
 
     public class MetadataAggregator : IMetadataAggregator
@@ -146,6 +149,11 @@ namespace NzbDrone.Core.Manga.Connectors
             }
 
             return metadata;
+        }
+
+        public async Task<VolumeChapterMap> GetVolumeChapterMapAsync(string mangadexId)
+        {
+            return await _mangadex.GetVolumeChapterMapAsync(mangadexId);
         }
     }
 }
