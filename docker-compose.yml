@@ -1,21 +1,20 @@
-version: '3.8'
-
 services:
   mangaarr:
     build: .
     container_name: mangaarr
     restart: unless-stopped
     ports:
-      - "8192:8989"
+      - "8192:8192"
     volumes:
-      - ./config:/config
-      - ./manga:/manga
+      - /opt/containers/media-stack/config/mangaarr:/config
+      - /mnt/media/Manga:/manga
     environment:
       - TZ=America/Chicago
+      - ASPNETCORE_URLS=http://+:8192
       - Database__Path=/config/mangaarr.db
       - MangaDex__BaseUrl=https://api.mangadex.org
       - MangaDex__Language=en
-      - Komga__BaseUrl=http://komga:25600
+      - Komga__BaseUrl=http://192.168.2.150:25600
       - Komga__ApiKey=
       - Monitoring__Enabled=true
       - Monitoring__CheckIntervalHours=24
@@ -24,75 +23,10 @@ services:
       - Paths__DownloadCache=/tmp/manga-arr
       - Paths__Logs=/config/logs
     networks:
-      - manga-network
-
-  komga:
-    image: gotson/komga:latest
-    container_name: komga
-    restart: unless-stopped
-    ports:
-      - "25600:25600"
-    volumes:
-      - ./komga-config:/config
-      - ./manga:/manga:ro
-    environment:
-      - TZ=America/Chicago
-    networks:
-      - manga-network
-
-  # Optional: Prowlarr for torrent/Usenet indexers
-  prowlarr:
-    image: lscr.io/linuxserver/prowlarr:latest
-    container_name: prowlarr
-    restart: unless-stopped
-    ports:
-      - "9696:9696"
-    volumes:
-      - ./prowlarr-config:/config
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=America/Chicago
-    networks:
-      - manga-network
-
-  # Optional: qBittorrent for torrent downloads
-  qbittorrent:
-    image: lscr.io/linuxserver/qbittorrent:latest
-    container_name: qbittorrent
-    restart: unless-stopped
-    ports:
-      - "8085:8080"
-      - "6881:6881"
-      - "6881:6881/udp"
-    volumes:
-      - ./qbittorrent-config:/config
-      - ./downloads:/downloads
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=America/Chicago
-      - WEBUI_PORT=8080
-    networks:
-      - manga-network
-
-  # Optional: SABnzbd for Usenet downloads
-  sabnzbd:
-    image: lscr.io/linuxserver/sabnzbd:latest
-    container_name: sabnzbd
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./sabnzbd-config:/config
-      - ./downloads:/downloads
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=America/Chicago
-    networks:
-      - manga-network
+      - media
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 networks:
-  manga-network:
-    driver: bridge
+  media:
+    external: true
