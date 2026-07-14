@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using System.Linq;
 using DryIoc;
 using NzbDrone.Common.EnvironmentInfo;
-using NzbDrone.Core.Manga.Connectors;
 
 namespace NzbDrone.Common.Composition.Extensions
 {
