@@ -160,6 +160,7 @@ namespace NzbDrone.Host
                         .AddNzbDroneLogger()
                         .AddDatabase()
                         .AddStartupContext(context)
+                        .AddMangaConnectors()
                         .Resolve<IEventAggregator>().PublishEvent(new ApplicationStartingEvent());
                 })
                 .ConfigureServices(services =>
