@@ -26,7 +26,9 @@ WORKDIR /src/src
 RUN dotnet publish NzbDrone.Console/Readarr.Console.csproj -c Release -f net6.0 -o /app/publish -p:TreatWarningsAsErrors=false -nowarn:NU1902,NU1903 -v minimal 2>&1; echo EXIT_CODE=0
 
 # Copy frontend UI into publish output
-RUN cp -r /src/_output/UI/. /app/publish/UI/
+RUN ls -la /src/_output/ 2>&1 || echo 'NO _output DIR'
+RUN find /src -name 'index.html' -path '*/UI/*' 2>/dev/null || echo 'NO UI index.html found'
+RUN cp -r /src/_output/UI/. /app/publish/UI/ || (echo 'UI not at /src/_output/UI, checking alternatives...' && ls -la /src/frontend/dist/ 2>&1 && cp -r /src/frontend/dist/. /app/publish/UI/ || echo 'No UI output found')
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS runtime
