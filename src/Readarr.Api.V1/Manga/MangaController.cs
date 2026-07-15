@@ -1,10 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.Http;
-using global::System.Threading.Tasks;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Common.Http;
 using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.Manga;
 using NzbDrone.Core.MediaCover;
@@ -21,16 +20,18 @@ namespace Readarr.Api.V1.Manga
     {
         private readonly IMangaSeriesService _mangaService;
         private readonly IMapCoversToLocal _coverMapper;
-        private static readonly HttpClient _httpClient = new HttpClient();
+        private readonly IHttpClient _httpClient;
 
         public MangaController(
             IMangaSeriesService mangaService,
             IMapCoversToLocal coverMapper,
+            IHttpClient httpClient,
             IBroadcastSignalRMessage signalRBroadcaster)
             : base(signalRBroadcaster)
         {
             _mangaService = mangaService;
             _coverMapper = coverMapper;
+            _httpClient = httpClient;
 
             SharedValidator.RuleFor(s => s.Title).NotEmpty();
             SharedValidator.RuleFor(s => s.Path).NotEmpty();
@@ -90,7 +91,7 @@ namespace Readarr.Api.V1.Manga
         }
 
         [HttpGet("cover")]
-        public async Task<IActionResult> GetCover([FromQuery] string url)
+        public IActionResult GetCover([FromQuery] string url)
         {
             if (string.IsNullOrEmpty(url) || !url.StartsWith("https://uploads.mangadex.org/"))
             {
@@ -99,11 +100,9 @@ namespace Readarr.Api.V1.Manga
 
             try
             {
-                var response = await _httpClient.GetAsync(url);
-                response.EnsureSuccessStatusCode();
-                var bytes = await response.Content.ReadAsByteArrayAsync();
-                var contentType = response.Content.Headers.ContentType?.MediaType ?? "image/jpeg";
-                return File(bytes, contentType);
+                var request = new HttpRequest(url);
+                var response = _httpClient.Get(request);
+                return File(response.ResponseData, "image/jpeg");
             }
             catch (Exception)
             {
