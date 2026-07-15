@@ -23,15 +23,13 @@ RUN yarn build
 
 # Build backend using Readarr's msbuild approach
 WORKDIR /src/src
-RUN sed -i '/PackageReference.*Sentry/d' /src/src/NzbDrone.Common/Readarr.Common.csproj
-RUN dotnet nuget locals all --clear
 RUN dotnet msbuild -restore Readarr.sln \
     -p:Configuration=Release \
     -p:Platform=Posix \
     -p:RuntimeIdentifiers=linux-x64 \
     -t:PublishAllRids \
     -p:TreatWarningsAsErrors=false \
-    -nowarn:NU1902,NU1903; echo EXIT_CODE=$?; test -f /src/_output/net6.0/linux-x64/Readarr.dll && echo OUTPUT_EXISTS || echo OUTPUT_MISSING
+    -nowarn:NU1902,NU1903
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS runtime
@@ -48,10 +46,6 @@ RUN mkdir -p /config /config/logs /manga /tmp/manga-arr
 
 # Copy build output
 COPY --from=build /src/_output/net6.0/linux-x64/. /app/
-
-# Diagnostic: verify what's in /app after COPY
-RUN ls -la /app/Readarr* 2>&1 || echo 'NO READARR DLL FOUND'
-RUN ls -la /app/ | head -20
 
 # Copy frontend UI
 COPY --from=build /src/_output/UI/. /app/UI/
