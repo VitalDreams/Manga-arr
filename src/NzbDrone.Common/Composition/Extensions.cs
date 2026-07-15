@@ -35,8 +35,6 @@ namespace NzbDrone.Common.Composition.Extensions
             var knownTypes = new KnownTypes(assemblies.SelectMany(x => x.GetTypes()).ToList());
             container.RegisterInstance(knownTypes);
 
-            // Register MangaDex as the default manga metadata connector
-            container.Register<IMangaMetadataConnector, MangaDexConnector>(Reuse.Singleton);
 
             return container;
         }
