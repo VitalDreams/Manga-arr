@@ -1,0 +1,32 @@
+[
+  {
+    "content": "Explore project structure and read relevant files",
+    "activeForm": "Exploring project structure and reading relevant files",
+    "status": "in_progress"
+  },
+  {
+    "content": "Fix MangaDexConnector.cs - JSON deserialization from string content",
+    "activeForm": "Fixing MangaDexConnector.cs JSON deserialization",
+    "status": "pending"
+  },
+  {
+    "content": "Fix MangaController lookup endpoint - error handling and null checking",
+    "activeForm": "Fixing MangaController lookup endpoint",
+    "status": "pending"
+  },
+  {
+    "content": "Create compatibility endpoint - author/lookup also returns manga results",
+    "activeForm": "Creating compatibility author/lookup endpoint for manga search",
+    "status": "pending"
+  },
+  {
+    "content": "Fix compilation errors - missing usings, type mismatches",
+    "activeForm": "Fixing compilation errors",
+    "status": "pending"
+  },
+  {
+    "content": "Build and verify compilation",
+    "activeForm": "Building and verifying compilation",
+    "status": "pending"
+  }
+]

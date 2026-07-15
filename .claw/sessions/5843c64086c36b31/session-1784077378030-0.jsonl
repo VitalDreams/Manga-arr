@@ -1,0 +1,3 @@
+{"created_at_ms":1784077378029,"model":"mimo-v2.5-pro","session_id":"session-1784077378030-0","type":"session_meta","updated_at_ms":1784077381985,"version":1,"workspace_root":"/Users/Donna/Projects/manga-arr"}
+{"message":{"blocks":[{"text":"Say hello in one word","type":"text"}],"role":"user"},"type":"message"}
+{"message":{"blocks":[{"thinking":"The user wants me to say hello in one word.","type":"thinking"},{"text":"Hello","type":"text"}],"role":"assistant","usage":{"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"input_tokens":7900,"output_tokens":15}},"type":"message"}
