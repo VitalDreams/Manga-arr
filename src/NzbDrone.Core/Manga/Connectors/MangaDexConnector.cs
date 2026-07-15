@@ -30,7 +30,7 @@ namespace NzbDrone.Core.Manga.Connectors
 
             var response = await GetAsync<MangaDexResponse<MangaDexManga>>(url);
 
-            return response.Data.Select(m => new MangaSearchResult
+            return response?.Data?.Select(m => new MangaSearchResult
             {
                 ForeignMangaId = m.Id,
                 Title = m.Attributes.Title.GetValueOrDefault("en") ?? m.Attributes.Title.Values.FirstOrDefault(),
@@ -43,7 +43,7 @@ namespace NzbDrone.Core.Manga.Connectors
                 CoverUrl = GetCoverUrl(m),
                 Genres = m.Attributes.Tags?.Where(t => t.Attributes?.Group == "genre").Select(t => t.Attributes.Name).ToList() ?? new List<string>(),
                 ContentRating = m.Attributes.ContentRating
-            }).ToList();
+            }).ToList() ?? new List<MangaSearchResult>();
         }
 
         public async Task<MangaMetadata> GetMangaMetadataAsync(string foreignMangaId)
@@ -113,7 +113,7 @@ namespace NzbDrone.Core.Manga.Connectors
                 ScanlationGroup = c.Relationships?.FirstOrDefault(r => r.Type == "scanlation_group")?.Attributes?.Name,
                 PageCount = c.Attributes.Pages,
                 ReleaseDate = c.Attributes.PublishAt
-            }).ToList();
+            }).ToList() ?? new List<MangaSearchResult>();
         }
 
         public async Task<ChapterPages> GetChapterPagesAsync(string foreignChapterId)
