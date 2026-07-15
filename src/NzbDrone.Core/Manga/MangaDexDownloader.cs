@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
-using System.Text.Json;
 using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Disk;
@@ -21,6 +20,7 @@ namespace NzbDrone.Core.Manga
     {
         private readonly IMangaMetadataConnector _connector;
         private readonly ICbzCreator _cbzCreator;
+        private readonly IMangaNamingService _namingService;
         private static readonly HttpClient _httpClient = new HttpClient();
         private readonly IDiskProvider _diskProvider;
         private readonly Logger _logger;
@@ -28,11 +28,13 @@ namespace NzbDrone.Core.Manga
         public MangaDexDownloader(
             IMangaMetadataConnector connector,
             ICbzCreator cbzCreator,
+            IMangaNamingService namingService,
             IDiskProvider diskProvider,
             Logger logger)
         {
             _connector = connector;
             _cbzCreator = cbzCreator;
+            _namingService = namingService;
             _diskProvider = diskProvider;
             _logger = logger;
         }
@@ -75,7 +77,11 @@ namespace NzbDrone.Core.Manga
                     chapterImages[chapter] = imagePaths;
                 }
 
-                var cbzPath = await _cbzCreator.CreateCbzFromVolumeAsync(outputDir, series, volume, chapterImages);
+                // Use naming service to determine the series folder under the root
+                var seriesFolder = _namingService.GetSeriesFolder(series);
+                var fullOutputDir = Path.Combine(outputDir, seriesFolder);
+
+                var cbzPath = await _cbzCreator.CreateCbzFromVolumeAsync(fullOutputDir, series, volume, chapterImages);
                 _logger.Info($"Created CBZ: {cbzPath}");
 
                 return cbzPath;
@@ -99,7 +105,12 @@ namespace NzbDrone.Core.Manga
             try
             {
                 var imagePaths = await DownloadPagesAsync(tempDir, chapter.ChapterNumber, pages);
-                var cbzPath = await _cbzCreator.CreateCbzFromChapterAsync(outputDir, series, volume, chapter, imagePaths);
+
+                // Use naming service to determine the series folder under the root
+                var seriesFolder = _namingService.GetSeriesFolder(series);
+                var fullOutputDir = Path.Combine(outputDir, seriesFolder);
+
+                var cbzPath = await _cbzCreator.CreateCbzFromChapterAsync(fullOutputDir, series, volume, chapter, imagePaths);
                 _logger.Info($"Created CBZ: {cbzPath}");
 
                 return cbzPath;
