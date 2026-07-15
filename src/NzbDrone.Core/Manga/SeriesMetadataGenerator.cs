@@ -10,7 +10,7 @@ namespace NzbDrone.Core.Manga
     public interface ISeriesMetadataGenerator
     {
         SeriesMetadata GenerateSeriesMetadata(MangaSeries series);
-        string GenerateSeriesMetadataJson(MangaSeries series);
+        string GenerateSeriesJson(MangaSeries series);
         void WriteSeriesMetadataFile(MangaSeries series);
     }
 
@@ -64,7 +64,7 @@ namespace NzbDrone.Core.Manga
             };
         }
 
-        public string GenerateSeriesMetadataJson(MangaSeries series)
+        public string GenerateSeriesJson(MangaSeries series)
         {
             var seriesMetadata = GenerateSeriesMetadata(series);
             if (seriesMetadata == null)
@@ -90,7 +90,7 @@ namespace NzbDrone.Core.Manga
             }
 
             var filePath = Path.Combine(seriesPath, "series.json");
-            var json = GenerateSeriesMetadataJson(series);
+            var json = GenerateSeriesJson(series);
 
             if (json == null)
             {
