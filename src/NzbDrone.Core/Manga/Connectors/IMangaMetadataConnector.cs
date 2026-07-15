@@ -42,6 +42,11 @@ namespace NzbDrone.Core.Manga.Connectors
         /// Get cover image URL for a manga
         /// </summary>
         Task<string> GetCoverUrlAsync(string foreignMangaId);
+
+        /// <summary>
+        /// Get story arcs for a manga (stub - MangaDex does not yet expose a direct arc API)
+        /// </summary>
+        Task<List<StoryArcInfo>> GetStoryArcsAsync(string foreignMangaId);
     }
 
     /// <summary>
@@ -96,5 +101,17 @@ namespace NzbDrone.Core.Manga.Connectors
         public string BaseUrl { get; set; }
         public List<string> PageUrls { get; set; }
         public string Hash { get; set; }
+    }
+
+    /// <summary>
+    /// Story arc information from a source
+    /// </summary>
+    public class StoryArcInfo
+    {
+        public string ForeignArcId { get; set; }
+        public string Name { get; set; }
+        public string Description { get; set; }
+        public int ArcOrder { get; set; }
+        public string ChapterRange { get; set; }
     }
 }

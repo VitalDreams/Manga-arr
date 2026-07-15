@@ -148,6 +148,11 @@ namespace NzbDrone.Core.Manga.Connectors
             return metadata?.CoverUrl;
         }
 
+        public Task<List<StoryArcInfo>> GetStoryArcsAsync(string foreignMangaId)
+        {
+            return Task.FromResult(new List<StoryArcInfo>());
+        }
+
         private async Task<T> PostGraphQLAsync<T>(string query, object variables)
         {
             await Task.Delay(RateLimitDelayMs);

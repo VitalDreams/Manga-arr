@@ -17,6 +17,10 @@ namespace NzbDrone.Core.Manga
             container.Register<IMangaFileRepository, MangaFileRepository>(Reuse.Singleton);
             container.Register<IMangaFileService, MangaFileService>(Reuse.Singleton);
 
+            // Register story arc service and repository
+            container.Register<IStoryArcRepository, StoryArcRepository>(Reuse.Singleton);
+            container.Register<IStoryArcService, StoryArcService>(Reuse.Singleton);
+
             return container;
         }
     }

@@ -37,6 +37,7 @@ namespace NzbDrone.Core.Manga
         // MangaArr generated/config
         public bool Monitored { get; set; }
         public bool ManualAdd { get; set; }
+        public int? StoryArcId { get; set; }
 
         // Dynamic loaded from DB
         [MemberwiseEqualityIgnore]
@@ -72,6 +73,7 @@ namespace NzbDrone.Core.Manga
             Volume = other.Volume;
             Monitored = other.Monitored;
             ManualAdd = other.ManualAdd;
+            StoryArcId = other.StoryArcId;
         }
 
         public override void ApplyChanges(Chapter other)

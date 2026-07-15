@@ -25,6 +25,7 @@ namespace NzbDrone.Core.Manga
         private readonly IVolumePackTracker _volumePackTracker;
         private readonly IMangaFileService _mangaFileService;
         private readonly ISeriesMetadataGenerator _metadataGenerator;
+        private readonly IStoryArcService _storyArcService;
         private static readonly HttpClient _httpClient = new HttpClient();
         private readonly IDiskProvider _diskProvider;
         private readonly Logger _logger;
@@ -36,6 +37,7 @@ namespace NzbDrone.Core.Manga
             IVolumePackTracker volumePackTracker,
             IMangaFileService mangaFileService,
             ISeriesMetadataGenerator metadataGenerator,
+            IStoryArcService storyArcService,
             IDiskProvider diskProvider,
             Logger logger)
         {
@@ -45,6 +47,7 @@ namespace NzbDrone.Core.Manga
             _volumePackTracker = volumePackTracker;
             _mangaFileService = mangaFileService;
             _metadataGenerator = metadataGenerator;
+            _storyArcService = storyArcService;
             _diskProvider = diskProvider;
             _logger = logger;
         }
@@ -163,6 +166,9 @@ namespace NzbDrone.Core.Manga
 
                 _mangaFileService.Add(mangaFile);
 
+                // Tag chapters with story arc info if applicable
+                TagChaptersWithArcs(series.MangaMetadataId, chapterNumbers);
+
                 _metadataGenerator.WriteSeriesMetadataFile(series);
 
                 return cbzPath;
@@ -209,6 +215,9 @@ namespace NzbDrone.Core.Manga
                 };
 
                 _mangaFileService.Add(mangaFile);
+
+                // Tag chapter with story arc info if applicable
+                TagChaptersWithArcs(series.MangaMetadataId, new List<decimal> { chapter.ChapterNumber });
 
                 _metadataGenerator.WriteSeriesMetadataFile(series);
 
@@ -267,6 +276,39 @@ namespace NzbDrone.Core.Manga
             var path = new Uri(url).AbsolutePath;
             var ext = Path.GetExtension(path);
             return string.IsNullOrEmpty(ext) ? ".jpg" : ext;
+        }
+
+        private void TagChaptersWithArcs(int mangaMetadataId, List<decimal> chapterNumbers)
+        {
+            var arcs = _storyArcService.GetArcs(mangaMetadataId);
+            if (arcs.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var arc in arcs)
+            {
+                if (string.IsNullOrEmpty(arc.ChapterRange))
+                {
+                    continue;
+                }
+
+                var rangeParts = arc.ChapterRange.Split('-');
+                if (rangeParts.Length != 2 ||
+                    !decimal.TryParse(rangeParts[0], out var rangeStart) ||
+                    !decimal.TryParse(rangeParts[1], out var rangeEnd))
+                {
+                    continue;
+                }
+
+                foreach (var chapterNumber in chapterNumbers)
+                {
+                    if (chapterNumber >= rangeStart && chapterNumber <= rangeEnd)
+                    {
+                        _logger.Debug("Chapter {0} belongs to story arc '{1}' (range {2})", chapterNumber, arc.Name, arc.ChapterRange);
+                    }
+                }
+            }
         }
     }
 }

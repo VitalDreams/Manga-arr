@@ -150,6 +150,14 @@ namespace NzbDrone.Core.Manga.Connectors
             return response?.Data != null ? GetCoverUrl(response.Data) : null;
         }
 
+        public Task<List<StoryArcInfo>> GetStoryArcsAsync(string foreignMangaId)
+        {
+            // MangaDex does not yet expose a direct story arc API.
+            // This stub returns an empty list; arcs can be created manually via the API
+            // or detected from volume groupings in a future implementation.
+            return Task.FromResult(new List<StoryArcInfo>());
+        }
+
         private string GetCoverUrl(MangaDexManga manga)
         {
             var coverRel = manga.Relationships?.FirstOrDefault(r => r.Type == "cover_art");
