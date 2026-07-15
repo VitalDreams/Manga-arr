@@ -25,6 +25,7 @@ RUN yarn build
 WORKDIR /src
 RUN dotnet msbuild -restore src/NzbDrone.Console/Readarr.Console.csproj \
     -t:Publish \
+    -f:net6.0 \
     -p:Configuration=Release \
     -p:Platform=Posix \
     -p:RuntimeIdentifiers=linux-x64 \
