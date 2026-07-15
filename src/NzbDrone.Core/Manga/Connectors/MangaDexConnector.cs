@@ -5,7 +5,7 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Common.Http;
-using NzbDrone.Common.Serializer.Newtonsoft.Json;
+using NzbDrone.Common.Serializer;
 
 namespace NzbDrone.Core.Manga.Connectors
 {
