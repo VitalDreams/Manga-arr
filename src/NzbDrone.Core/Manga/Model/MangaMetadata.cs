@@ -12,6 +12,7 @@ namespace NzbDrone.Core.Manga
             Links = new List<Links>();
             Genres = new List<string>();
             Tags = new List<string>();
+            AlternateTitles = new Dictionary<string, string>();
             Ratings = new Ratings();
         }
 
@@ -34,6 +35,7 @@ namespace NzbDrone.Core.Manga
         public List<string> Genres { get; set; }
         public List<string> Tags { get; set; }
         public List<Links> Links { get; set; }
+        public Dictionary<string, string> AlternateTitles { get; set; }
         public Ratings Ratings { get; set; }
         public DateTime? LastInfoSync { get; set; }
 

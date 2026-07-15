@@ -57,10 +57,16 @@ namespace NzbDrone.Core.Manga.Connectors
                 return null;
             }
 
+            var primaryTitle = m.Attributes?.Title?.GetValueOrDefault("en") ?? m.Attributes?.Title?.Values.FirstOrDefault();
+            var alternateTitles = m.Attributes?.Title?
+                .Where(kvp => kvp.Value != primaryTitle)
+                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
+                ?? new Dictionary<string, string>();
+
             return new MangaMetadata
             {
                 ForeignMangaId = m.Id,
-                Title = m.Attributes?.Title?.GetValueOrDefault("en") ?? m.Attributes?.Title?.Values.FirstOrDefault(),
+                Title = primaryTitle,
                 Description = m.Attributes?.Description?.GetValueOrDefault("en") ?? m.Attributes?.Description?.Values.FirstOrDefault(),
                 Author = m.Relationships?.FirstOrDefault(r => r.Type == "author")?.Attributes?.Name,
                 Artist = m.Relationships?.FirstOrDefault(r => r.Type == "artist")?.Attributes?.Name,
@@ -71,6 +77,7 @@ namespace NzbDrone.Core.Manga.Connectors
                 Year = m.Attributes?.Year ?? 0,
                 Genres = m.Attributes?.Tags?.Where(t => t.Attributes?.Group == "genre").Select(t => t.Attributes?.Name?.GetValueOrDefault("en")).ToList() ?? new List<string>(),
                 Tags = m.Attributes?.Tags?.Where(t => t.Attributes?.Group == "theme").Select(t => t.Attributes?.Name?.GetValueOrDefault("en")).ToList() ?? new List<string>(),
+                AlternateTitles = alternateTitles,
                 CoverUrl = GetCoverUrl(m),
                 LastInfoSync = DateTime.UtcNow
             };
