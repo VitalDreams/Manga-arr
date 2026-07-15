@@ -42,13 +42,6 @@ namespace Readarr.Api.V1.Manga
             return _mangaService.GetAllSeries().ToResource();
         }
 
-        [HttpGet("lookup")]
-        [Produces("application/json")]
-        public object LookupManga([FromQuery] string term)
-        {
-            // Search MangaDex for manga — will be wired to MangaDexConnector later
-            return new List<object>();
-        }
 
         [RestPostById]
         public ActionResult<MangaResource> AddManga([FromBody] MangaResource mangaResource)
