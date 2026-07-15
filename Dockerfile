@@ -23,6 +23,7 @@ RUN yarn build
 
 # Build backend using Readarr's msbuild approach
 WORKDIR /src/src
+RUN dotnet nuget locals all --clear
 RUN dotnet msbuild -restore Readarr.sln \
     -p:Configuration=Release \
     -p:Platform=Posix \
