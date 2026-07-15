@@ -3,6 +3,14 @@
 interface CssExports {
   'clearLookupButton': string;
   'helpText': string;
+  'mangaAuthor': string;
+  'mangaCover': string;
+  'mangaInfo': string;
+  'mangaOverview': string;
+  'mangaResult': string;
+  'mangaStatus': string;
+  'mangaTitle': string;
+  'mangaYear': string;
   'message': string;
   'noResults': string;
   'searchContainer': string;

@@ -87,7 +87,7 @@ export const actionHandlers = handleThunks({
     }
 
     const { request, abortRequest } = createAjaxRequest({
-      url: '/search',
+      url: '/manga/lookup',
       data: {
         term: payload.term
       }

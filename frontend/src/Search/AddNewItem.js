@@ -4,15 +4,12 @@ import Alert from 'Components/Alert';
 import TextInput from 'Components/Form/TextInput';
 import Icon from 'Components/Icon';
 import Button from 'Components/Link/Button';
-import Link from 'Components/Link/Link';
 import LoadingIndicator from 'Components/Loading/LoadingIndicator';
 import PageContent from 'Components/Page/PageContent';
 import PageContentBody from 'Components/Page/PageContentBody';
 import { icons, kinds } from 'Helpers/Props';
 import getErrorMessage from 'Utilities/Object/getErrorMessage';
 import translate from 'Utilities/String/translate';
-import AddNewAuthorSearchResultConnector from './Author/AddNewAuthorSearchResultConnector';
-import AddNewBookSearchResultConnector from './Book/AddNewBookSearchResultConnector';
 import styles from './AddNewItem.css';
 
 class AddNewItem extends Component {
@@ -147,26 +144,52 @@ class AddNewItem extends Component {
               <div className={styles.searchResults}>
                 {
                   items.map((item) => {
-                    if (item.author) {
-                      const author = item.author;
-                      return (
-                        <AddNewAuthorSearchResultConnector
-                          key={item.id}
-                          {...author}
-                        />
-                      );
-                    } else if (item.book) {
-                      const book = item.book;
-                      return (
-                        <AddNewBookSearchResultConnector
-                          key={item.id}
-                          isExistingBook={'id' in book && book.id !== 0}
-                          isExistingAuthor={'id' in book.author && book.author.id !== 0}
-                          {...book}
-                        />
-                      );
-                    }
-                    return null;
+                    return (
+                      <div key={item.foreignMangaId} className={styles.mangaResult}>
+                        {
+                          item.coverUrl ?
+                            <img
+                              className={styles.mangaCover}
+                              src={item.coverUrl}
+                            /> :
+                            null
+                        }
+
+                        <div className={styles.mangaInfo}>
+                          <div className={styles.mangaTitle}>
+                            {item.title}
+                          </div>
+
+                          <div className={styles.mangaAuthor}>
+                            {item.author}
+                          </div>
+
+                          {
+                            item.year > 0 ?
+                              <div className={styles.mangaYear}>
+                                {item.year}
+                              </div> :
+                              null
+                          }
+
+                          {
+                            item.status ?
+                              <div className={styles.mangaStatus}>
+                                {item.status}
+                              </div> :
+                              null
+                          }
+
+                          {
+                            item.overview ?
+                              <div className={styles.mangaOverview}>
+                                {item.overview}
+                              </div> :
+                              null
+                          }
+                        </div>
+                      </div>
+                    );
                   })
                 }
               </div>
@@ -179,9 +202,7 @@ class AddNewItem extends Component {
                   {translate('CouldntFindAnyResultsForTerm', [term])}
                 </div>
                 <div>
-                  You can also search using the
-                  <Link to="https://goodreads.com"> Goodreads ID </Link>
-                  of a book (e.g. edition:656), work (e.g. work:4912783) or author (e.g. author:128382), the isbn (e.g. isbn:067003469X) or the asin (e.g. asin:B00JCDK5ME)
+                  Search uses MangaDex to find manga titles.
                 </div>
               </div>
           }
@@ -194,9 +215,7 @@ class AddNewItem extends Component {
                   {translate('ItsEasyToAddANewAuthorOrBookJustStartTypingTheNameOfTheItemYouWantToAdd')}
                 </div>
                 <div>
-                  You can also search using the
-                  <Link to="https://goodreads.com"> Goodreads ID </Link>
-                  of a book (e.g. edition:656), work (e.g. work:4912783) or author (e.g. author:128382), the isbn (e.g. isbn:067003469X) or the asin (e.g. asin:B00JCDK5ME)
+                  Search uses MangaDex to find manga titles.
                 </div>
               </div>
           }
