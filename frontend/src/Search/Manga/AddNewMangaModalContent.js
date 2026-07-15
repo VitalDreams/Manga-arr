@@ -44,6 +44,7 @@ class AddNewMangaModalContent extends Component {
                   <img
                     className={styles.posterImage}
                     src={coverUrl}
+                    crossOrigin='anonymous'
                   />
                 </div>
             }

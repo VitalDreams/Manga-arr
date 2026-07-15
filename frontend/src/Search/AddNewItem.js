@@ -172,6 +172,7 @@ class AddNewItem extends Component {
                             <img
                               className={styles.mangaCover}
                               src={item.coverUrl}
+                              crossOrigin='anonymous'
                             /> :
                             null
                         }
