@@ -1,0 +1,57 @@
+.container {
+  display: flex;
+}
+
+.poster {
+  flex: 0 0 170px;
+  margin-right: 20px;
+  height: 250px;
+}
+
+.posterImage {
+  width: 170px;
+  height: 250px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.info {
+  flex-grow: 1;
+}
+
+.title {
+  font-weight: 300;
+  font-size: 36px;
+}
+
+.author {
+  margin-bottom: 20px;
+  font-weight: 300;
+  font-size: 24px;
+}
+
+.overview {
+  margin-bottom: 30px;
+  max-height: 230px;
+  text-align: justify;
+}
+
+.modalFooter {
+  composes: modalFooter from '~Components/Modal/ModalFooter.css';
+}
+
+.addButton {
+  @add-mixin truncate;
+  composes: button from '~Components/Link/SpinnerButton.css';
+}
+
+@media only screen and (max-width: $breakpointSmall) {
+  .modalFooter {
+    display: block;
+    text-align: center;
+  }
+
+  .addButton {
+    margin-top: 10px;
+  }
+}

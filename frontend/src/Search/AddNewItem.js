@@ -10,6 +10,7 @@ import PageContentBody from 'Components/Page/PageContentBody';
 import { icons, kinds } from 'Helpers/Props';
 import getErrorMessage from 'Utilities/Object/getErrorMessage';
 import translate from 'Utilities/String/translate';
+import AddNewMangaModal from './Manga/AddNewMangaModal';
 import styles from './AddNewItem.css';
 
 class AddNewItem extends Component {
@@ -22,7 +23,9 @@ class AddNewItem extends Component {
 
     this.state = {
       term: props.term || '',
-      isFetching: false
+      isFetching: false,
+      isAddMangaModalOpen: false,
+      selectedManga: null
     };
   }
 
@@ -73,6 +76,20 @@ class AddNewItem extends Component {
     this.props.onClearSearch();
   };
 
+  onMangaResultPress = (item) => {
+    this.setState({
+      isAddMangaModalOpen: true,
+      selectedManga: item
+    });
+  };
+
+  onAddMangaModalClose = () => {
+    this.setState({
+      isAddMangaModalOpen: false,
+      selectedManga: null
+    });
+  };
+
   //
   // Render
 
@@ -83,8 +100,12 @@ class AddNewItem extends Component {
       hasExistingAuthors
     } = this.props;
 
-    const term = this.state.term;
-    const isFetching = this.state.isFetching;
+    const {
+      term,
+      isFetching,
+      isAddMangaModalOpen,
+      selectedManga
+    } = this.state;
 
     return (
       <PageContent title={translate('AddNewItem')}>
@@ -145,7 +166,7 @@ class AddNewItem extends Component {
                 {
                   items.map((item) => {
                     return (
-                      <div key={item.foreignMangaId} className={styles.mangaResult}>
+                      <div key={item.foreignMangaId} className={styles.mangaResult} onClick={() => this.onMangaResultPress(item)}>
                         {
                           item.coverUrl ?
                             <img
@@ -239,6 +260,19 @@ class AddNewItem extends Component {
           }
 
           <div />
+
+          {
+            selectedManga &&
+              <AddNewMangaModal
+                isOpen={isAddMangaModalOpen}
+                foreignMangaId={selectedManga.foreignMangaId}
+                title={selectedManga.title}
+                author={selectedManga.author}
+                coverUrl={selectedManga.coverUrl}
+                overview={selectedManga.overview}
+                onModalClose={this.onAddMangaModalClose}
+              />
+          }
         </PageContentBody>
       </PageContent>
     );

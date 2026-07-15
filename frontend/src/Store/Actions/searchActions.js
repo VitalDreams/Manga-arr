@@ -6,6 +6,7 @@ import getNewAuthor from 'Utilities/Author/getNewAuthor';
 import monitorNewItemsOptions from 'Utilities/Author/monitorNewItemsOptions';
 import monitorOptions from 'Utilities/Author/monitorOptions';
 import getNewBook from 'Utilities/Book/getNewBook';
+import getNewManga from 'Utilities/Manga/getNewManga';
 import createAjaxRequest from 'Utilities/createAjaxRequest';
 import getSectionState from 'Utilities/State/getSectionState';
 import updateSectionState from 'Utilities/State/updateSectionState';
@@ -46,12 +47,22 @@ export const defaultState = {
     qualityProfileId: 0,
     metadataProfileId: 0,
     tags: []
+  },
+
+  mangaDefaults: {
+    rootFolderPath: '',
+    monitor: monitorOptions[0].key,
+    monitorNewItems: monitorNewItemsOptions[0].key,
+    qualityProfileId: 0,
+    metadataProfileId: 0,
+    tags: []
   }
 };
 
 export const persistState = [
   'search.bookDefaults',
-  'search.authorDefaults'
+  'search.authorDefaults',
+  'search.mangaDefaults'
 ];
 
 //
@@ -60,9 +71,11 @@ export const persistState = [
 export const GET_SEARCH_RESULTS = 'search/getSearchResults';
 export const ADD_AUTHOR = 'search/addAuthor';
 export const ADD_BOOK = 'search/addBook';
+export const ADD_MANGA = 'search/addManga';
 export const CLEAR_SEARCH_RESULTS = 'search/clearSearchResults';
 export const SET_AUTHOR_ADD_DEFAULT = 'search/setAuthorAddDefault';
 export const SET_BOOK_ADD_DEFAULT = 'search/setBookAddDefault';
+export const SET_MANGA_ADD_DEFAULT = 'search/setMangaAddDefault';
 
 //
 // Action Creators
@@ -70,9 +83,11 @@ export const SET_BOOK_ADD_DEFAULT = 'search/setBookAddDefault';
 export const getSearchResults = createThunk(GET_SEARCH_RESULTS);
 export const addAuthor = createThunk(ADD_AUTHOR);
 export const addBook = createThunk(ADD_BOOK);
+export const addManga = createThunk(ADD_MANGA);
 export const clearSearchResults = createAction(CLEAR_SEARCH_RESULTS);
 export const setAuthorAddDefault = createAction(SET_AUTHOR_ADD_DEFAULT);
 export const setBookAddDefault = createAction(SET_BOOK_ADD_DEFAULT);
+export const setMangaAddDefault = createAction(SET_MANGA_ADD_DEFAULT);
 
 //
 // Action Handlers
@@ -197,6 +212,43 @@ export const actionHandlers = handleThunks({
         addError: xhr
       }));
     });
+  },
+
+  [ADD_MANGA]: function(getState, payload, dispatch) {
+    dispatch(set({ section, isAdding: true }));
+
+    const foreignMangaId = payload.foreignMangaId;
+    const items = getState().search.items;
+    const itemToAdd = _.find(items, { foreignMangaId });
+    const newManga = getNewManga(_.cloneDeep(itemToAdd), payload);
+
+    const promise = createAjaxRequest({
+      url: '/manga',
+      method: 'POST',
+      dataType: 'json',
+      contentType: 'application/json',
+      data: JSON.stringify(newManga)
+    }).request;
+
+    promise.done((data) => {
+      dispatch(batchActions([
+        set({
+          section,
+          isAdding: false,
+          isAdded: true,
+          addError: null
+        })
+      ]));
+    });
+
+    promise.fail((xhr) => {
+      dispatch(set({
+        section,
+        isAdding: false,
+        isAdded: false,
+        addError: xhr
+      }));
+    });
   }
 });
 
@@ -227,10 +279,22 @@ export const reducers = createHandleActions({
     return updateSectionState(state, section, newState);
   },
 
+  [SET_MANGA_ADD_DEFAULT]: function(state, { payload }) {
+    const newState = getSectionState(state, section);
+
+    newState.mangaDefaults = {
+      ...newState.mangaDefaults,
+      ...payload
+    };
+
+    return updateSectionState(state, section, newState);
+  },
+
   [CLEAR_SEARCH_RESULTS]: function(state) {
     const {
       authorDefaults,
       bookDefaults,
+      mangaDefaults,
       ...otherDefaultState
     } = defaultState;
 
