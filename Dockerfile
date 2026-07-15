@@ -24,6 +24,28 @@ RUN yarn build
 # Build backend - nuclear option: strip Sentry before build
 WORKDIR /src/src
 RUN sed -i '/PackageReference.*Sentry/d' NzbDrone.Common/Readarr.Common.csproj
+
+# Remove Sentry source files (they reference types from the stripped NuGet package)
+RUN rm -f NzbDrone.Common/Instrumentation/Sentry/SentryCleanser.cs \
+          NzbDrone.Common/Instrumentation/Sentry/SentryTarget.cs \
+          NzbDrone.Common/Instrumentation/Sentry/SentryDebounce.cs \
+          NzbDrone.Core/Instrumentation/ReconfigureSentry.cs \
+          NzbDrone.Common.Test/InstrumentationTests/SentryTargetFixture.cs
+
+# Clean up NzbDroneLogger.cs - remove Sentry references
+RUN sed -i '/using NzbDrone.Common.Instrumentation.Sentry;/d' NzbDrone.Common/Instrumentation/NzbDroneLogger.cs && \
+    sed -i '/RegisterSentry(updateApp, appFolderInfo);/d' NzbDrone.Common/Instrumentation/NzbDroneLogger.cs && \
+    sed -i '/private static void RegisterSentry/,/^        private/ { /^        private/!d; }' NzbDrone.Common/Instrumentation/NzbDroneLogger.cs
+
+# Clean up InitializeLogger.cs - remove Sentry references
+RUN sed -i '/using NzbDrone.Common.Instrumentation.Sentry;/d' NzbDrone.Common/Instrumentation/InitializeLogger.cs && \
+    sed -i '/var sentryTarget = LogManager.Configuration.AllTargets.OfType<SentryTarget>().FirstOrDefault();/,/}/d' NzbDrone.Common/Instrumentation/InitializeLogger.cs
+
+# Clean up ReconfigureLogging.cs - remove Sentry references
+RUN sed -i '/using NzbDrone.Common.Instrumentation.Sentry;/d' NzbDrone.Core/Instrumentation/ReconfigureLogging.cs && \
+    sed -i '/ReconfigureSentry();/d' NzbDrone.Core/Instrumentation/ReconfigureLogging.cs && \
+    sed -i '/private void ReconfigureSentry()/,/^        private void SetSyslogParameters/ { /^        private void SetSyslogParameters/!d; }' NzbDrone.Core/Instrumentation/ReconfigureLogging.cs
+
 RUN dotnet nuget locals all --clear
 RUN dotnet msbuild -restore Readarr.sln \
     -p:Configuration=Release \
