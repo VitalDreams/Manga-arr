@@ -41,7 +41,7 @@ namespace NzbDrone.Core.Manga.Connectors
                 Demographic = m.Attributes?.PublicationDemographic,
                 Year = m.Attributes?.Year ?? 0,
                 CoverUrl = GetCoverUrl(m),
-                Genres = m.Attributes?.Tags?.Where(t => t.Attributes?.Group == "genre").Select(t => t.Attributes?.Name).ToList() ?? new List<string>(),
+                Genres = m.Attributes?.Tags?.Where(t => t.Attributes?.Group == "genre").Select(t => t.Attributes?.Name?.GetValueOrDefault("en")).ToList() ?? new List<string>(),
                 ContentRating = m.Attributes?.ContentRating
             }).ToList();
         }
@@ -69,8 +69,8 @@ namespace NzbDrone.Core.Manga.Connectors
                 Status = m.Attributes?.Status,
                 ContentRating = m.Attributes?.ContentRating,
                 Year = m.Attributes?.Year ?? 0,
-                Genres = m.Attributes?.Tags?.Where(t => t.Attributes?.Group == "genre").Select(t => t.Attributes?.Name).ToList() ?? new List<string>(),
-                Tags = m.Attributes?.Tags?.Where(t => t.Attributes?.Group == "theme").Select(t => t.Attributes?.Name).ToList() ?? new List<string>(),
+                Genres = m.Attributes?.Tags?.Where(t => t.Attributes?.Group == "genre").Select(t => t.Attributes?.Name?.GetValueOrDefault("en")).ToList() ?? new List<string>(),
+                Tags = m.Attributes?.Tags?.Where(t => t.Attributes?.Group == "theme").Select(t => t.Attributes?.Name?.GetValueOrDefault("en")).ToList() ?? new List<string>(),
                 CoverUrl = GetCoverUrl(m),
                 LastInfoSync = DateTime.UtcNow
             };
@@ -202,7 +202,7 @@ namespace NzbDrone.Core.Manga.Connectors
 
     public class MangaDexTagAttributes
     {
-        public string Name { get; set; }
+        public Dictionary<string, string> Name { get; set; }
         public string Group { get; set; }
     }
 
