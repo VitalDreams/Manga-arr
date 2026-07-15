@@ -21,19 +21,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN yarn install --frozen-lockfile --network-timeout 120000
 RUN yarn build
 
-# Build backend using Readarr's msbuild approach
-WORKDIR /src/src
-RUN dotnet msbuild -restore Readarr.sln \
+# Build backend - target Console project directly to produce Readarr.dll
+WORKDIR /src
+RUN dotnet msbuild -restore src/NzbDrone.Console/Readarr.Console.csproj \
+    -t:Publish \
     -p:Configuration=Release \
     -p:Platform=Posix \
     -p:RuntimeIdentifiers=linux-x64 \
-    -t:PublishAllRids \
     -p:TreatWarningsAsErrors=false \
-    -nowarn:NU1902,NU1903 \
-    > /tmp/build.log 2>&1; \
-    echo EXIT=$?; \
-    cat /tmp/build.log | grep -i 'sentry\|error\|fail\|exception' | tail -20; \
-    echo '---END---'
+    -nowarn:NU1902,NU1903
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS runtime
