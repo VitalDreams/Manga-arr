@@ -8,7 +8,6 @@ COPY Logo/ Logo/
 COPY frontend/ frontend/
 COPY package.json yarn.lock ./
 COPY tsconfig.json ./
-COPY scripts/ scripts/
 
 # Install Node.js for frontend build
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -22,16 +21,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN yarn install --frozen-lockfile --network-timeout 120000
 RUN yarn build
 
-# Build backend - strip Sentry before build
+# Build backend using Readarr's msbuild approach
 WORKDIR /src/src
-RUN sed -i '/PackageReference.*Sentry/d' NzbDrone.Common/Readarr.Common.csproj
-RUN rm -f NzbDrone.Common/Instrumentation/Sentry/SentryCleanser.cs \
-          NzbDrone.Common/Instrumentation/Sentry/SentryTarget.cs \
-          NzbDrone.Common/Instrumentation/Sentry/SentryDebounce.cs \
-          NzbDrone.Core/Instrumentation/ReconfigureSentry.cs \
-          NzbDrone.Common.Test/InstrumentationTests/SentryTargetFixture.cs
-RUN bash /src/scripts/strip-sentry.sh
-RUN dotnet nuget locals all --clear
 RUN dotnet msbuild -restore Readarr.sln \
     -p:Configuration=Release \
     -p:Platform=Posix \

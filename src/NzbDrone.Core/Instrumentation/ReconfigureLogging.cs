@@ -7,7 +7,6 @@ using NLog.Targets.Syslog.Settings;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Common.Instrumentation;
-using NzbDrone.Common.Instrumentation.Sentry;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Configuration.Events;
 using NzbDrone.Core.Datastore;
@@ -62,9 +61,6 @@ namespace NzbDrone.Core.Instrumentation
             //Log Sql
             SqlBuilderExtensions.LogSql = _configFileProvider.LogSql;
 
-            //Sentry
-            ReconfigureSentry();
-
             LogManager.ReconfigExistingLoggers();
         }
 
@@ -96,16 +92,6 @@ namespace NzbDrone.Core.Instrumentation
             foreach (var target in LogManager.Configuration.AllTargets.OfType<NzbDroneFileTarget>())
             {
                 target.MaxArchiveFiles = _configFileProvider.LogRotate;
-            }
-        }
-
-        private void ReconfigureSentry()
-        {
-            var sentryTarget = LogManager.Configuration.AllTargets.OfType<SentryTarget>().FirstOrDefault();
-            if (sentryTarget != null)
-            {
-                sentryTarget.SentryEnabled = (RuntimeInfo.IsProduction && _configFileProvider.AnalyticsEnabled) || RuntimeInfo.IsDevelopment;
-                sentryTarget.FilterEvents = _configFileProvider.FilterSentryEvents;
             }
         }
 
