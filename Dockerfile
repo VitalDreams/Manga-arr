@@ -21,12 +21,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN yarn install --frozen-lockfile --network-timeout 120000
 RUN yarn build
 
-# Build backend - msbuild on Host project (pulls in all deps, skips test projects and Sentry solution targets)
-WORKDIR /src
-RUN dotnet msbuild -restore src/NzbDrone.Host/Readarr.Host.csproj \
+# Build backend using Readarr's msbuild approach
+WORKDIR /src/src
+RUN dotnet msbuild -restore Readarr.sln \
     -p:Configuration=Release \
     -p:Platform=Posix \
     -p:RuntimeIdentifiers=linux-x64 \
+    -t:PublishAllRids \
     -p:TreatWarningsAsErrors=false \
     -nowarn:NU1902,NU1903
 
@@ -43,8 +44,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Create directories
 RUN mkdir -p /config /config/logs /manga /tmp/manga-arr
 
-# Copy build output (includes UI)
-COPY --from=build /src/_output/. /app/
+# Copy build output
+COPY --from=build /src/_output/net6.0/linux-x64/. /app/
+
+# Copy frontend UI
+COPY --from=build /src/_output/UI/. /app/UI/
 
 # Expose port (8192 to avoid conflict with Sonarr on 8989)
 EXPOSE 8192
