@@ -9,6 +9,8 @@ services:
       - /opt/containers/media-stack/config/mangaarr:/config
       - /mnt/media/Manga:/manga
     environment:
+      - PUID=0
+      - PGID=0
       - TZ=America/Chicago
       - Database__Path=/config/mangaarr.db
       - MangaDex__BaseUrl=https://api.mangadex.org

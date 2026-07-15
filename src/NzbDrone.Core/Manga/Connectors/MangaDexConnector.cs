@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
-using System.Text.Json;
 using System.Threading.Tasks;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Common.Http;
+using NzbDrone.Common.Serializer.Newtonsoft.Json;
 
 namespace NzbDrone.Core.Manga.Connectors
 {
@@ -150,17 +150,12 @@ namespace NzbDrone.Core.Manga.Connectors
             return fileName != null ? $"https://uploads.mangadex.org/covers/{manga.Id}/{fileName}" : null;
         }
 
-        private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        };
-
         private async Task<T> GetAsync<T>(string url)
         {
             await Task.Delay(RateLimitDelayMs); // Rate limiting
             var request = new HttpRequestBuilder(url).Build();
             var response = await _httpClient.GetAsync(request);
-            return JsonSerializer.Deserialize<T>(response.Content, JsonOptions);
+            return Json.Deserialize<T>(response.Content);
         }
     }
 
