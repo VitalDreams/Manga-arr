@@ -12,6 +12,7 @@ using NzbDrone.Common.Http;
 using NzbDrone.Core.Books;
 using NzbDrone.Core.Books.Events;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Manga;
 using NzbDrone.Core.Messaging.Events;
 
 namespace NzbDrone.Core.MediaCover
@@ -27,6 +28,8 @@ namespace NzbDrone.Core.MediaCover
         IHandleAsync<AuthorRefreshCompleteEvent>,
         IHandleAsync<AuthorDeletedEvent>,
         IHandleAsync<BookDeletedEvent>,
+        IHandleAsync<MangaSeriesAddedEvent>,
+        IHandleAsync<MangaSeriesDeletedEvent>,
         IMapCoversToLocal
     {
         private const string USER_AGENT = "Dalvik/2.1.0 (Linux; U; Android 10; SM-G975U Build/QP1A.190711.020)";
@@ -34,6 +37,7 @@ namespace NzbDrone.Core.MediaCover
         private readonly IMediaCoverProxy _mediaCoverProxy;
         private readonly IImageResizer _resizer;
         private readonly IBookService _bookService;
+        private readonly IMangaSeriesService _mangaService;
         private readonly IHttpClient _httpClient;
         private readonly IDiskProvider _diskProvider;
         private readonly ICoverExistsSpecification _coverExistsSpecification;
@@ -50,6 +54,7 @@ namespace NzbDrone.Core.MediaCover
         public MediaCoverService(IMediaCoverProxy mediaCoverProxy,
                                  IImageResizer resizer,
                                  IBookService bookService,
+                                 IMangaSeriesService mangaService,
                                  IHttpClient httpClient,
                                  IDiskProvider diskProvider,
                                  IAppFolderInfo appFolderInfo,
@@ -61,6 +66,7 @@ namespace NzbDrone.Core.MediaCover
             _mediaCoverProxy = mediaCoverProxy;
             _resizer = resizer;
             _bookService = bookService;
+            _mangaService = mangaService;
             _httpClient = httpClient;
             _diskProvider = diskProvider;
             _coverExistsSpecification = coverExistsSpecification;
@@ -78,6 +84,11 @@ namespace NzbDrone.Core.MediaCover
             if (coverEntity == MediaCoverEntity.Book)
             {
                 return Path.Combine(GetBookCoverPath(entityId), coverType.ToString().ToLower() + heightSuffix + GetExtension(coverType, extension));
+            }
+
+            if (coverEntity == MediaCoverEntity.Manga)
+            {
+                return Path.Combine(GetMangaCoverPath(entityId), coverType.ToString().ToLower() + heightSuffix + GetExtension(coverType, extension));
             }
 
             return Path.Combine(GetAuthorCoverPath(entityId), coverType.ToString().ToLower() + heightSuffix + GetExtension(coverType, extension));
@@ -111,6 +122,10 @@ namespace NzbDrone.Core.MediaCover
                     {
                         mediaCover.Url = _configFileProvider.UrlBase + @"/MediaCover/Books/" + entityId + "/" + mediaCover.CoverType.ToString().ToLower() + GetExtension(mediaCover.CoverType, mediaCover.Extension);
                     }
+                    else if (coverEntity == MediaCoverEntity.Manga)
+                    {
+                        mediaCover.Url = _configFileProvider.UrlBase + @"/MediaCover/Manga/" + entityId + "/" + mediaCover.CoverType.ToString().ToLower() + GetExtension(mediaCover.CoverType, mediaCover.Extension);
+                    }
                     else
                     {
                         mediaCover.Url = _configFileProvider.UrlBase + @"/MediaCover/" + entityId + "/" + mediaCover.CoverType.ToString().ToLower() + GetExtension(mediaCover.CoverType, mediaCover.Extension);
@@ -133,6 +148,11 @@ namespace NzbDrone.Core.MediaCover
         private string GetBookCoverPath(int bookId)
         {
             return Path.Combine(_coverRootFolder, "Books", bookId.ToString());
+        }
+
+        private string GetMangaCoverPath(int mangaId)
+        {
+            return Path.Combine(_coverRootFolder, "Manga", mangaId.ToString());
         }
 
         private void EnsureAuthorCovers(Author author)
@@ -226,6 +246,49 @@ namespace NzbDrone.Core.MediaCover
                 {
                     _logger.Error(e, "Couldn't download media cover for {0}", book);
                 }
+            }
+        }
+
+        public void EnsureMangaCovers(MangaSeries mangaSeries)
+        {
+            var coverUrl = mangaSeries.Metadata?.Value?.CoverUrl;
+
+            if (coverUrl.IsNullOrWhiteSpace())
+            {
+                return;
+            }
+
+            var cover = new MediaCover(MediaCoverTypes.Cover, coverUrl);
+            var fileName = GetCoverPath(mangaSeries.Id, MediaCoverEntity.Manga, cover.CoverType, cover.Extension, null);
+
+            if (_diskProvider.FileExists(fileName) && _diskProvider.GetFileSize(fileName) > 0)
+            {
+                return;
+            }
+
+            try
+            {
+                _logger.Info("Downloading {0} for {1} {2}", cover.CoverType, mangaSeries, cover.Url);
+
+                var directory = Path.GetDirectoryName(fileName);
+                if (!_diskProvider.FolderExists(directory))
+                {
+                    _diskProvider.CreateFolder(directory);
+                }
+
+                _httpClient.DownloadFile(cover.Url, fileName, USER_AGENT);
+            }
+            catch (HttpException e)
+            {
+                _logger.Warn("Couldn't download media cover for {0}. {1}", mangaSeries, e.Message);
+            }
+            catch (WebException e)
+            {
+                _logger.Warn("Couldn't download media cover for {0}. {1}", mangaSeries, e.Message);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Couldn't download media cover for {0}", mangaSeries);
             }
         }
 
@@ -377,6 +440,20 @@ namespace NzbDrone.Core.MediaCover
         public void HandleAsync(BookDeletedEvent message)
         {
             var path = GetBookCoverPath(message.Book.Id);
+            if (_diskProvider.FolderExists(path))
+            {
+                _diskProvider.DeleteFolder(path, true);
+            }
+        }
+
+        public void HandleAsync(MangaSeriesAddedEvent message)
+        {
+            EnsureMangaCovers(message.Series);
+        }
+
+        public void HandleAsync(MangaSeriesDeletedEvent message)
+        {
+            var path = GetMangaCoverPath(message.Series.Id);
             if (_diskProvider.FolderExists(path))
             {
                 _diskProvider.DeleteFolder(path, true);

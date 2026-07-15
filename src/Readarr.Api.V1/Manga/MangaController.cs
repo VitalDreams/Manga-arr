@@ -7,6 +7,7 @@ using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.Manga;
+using NzbDrone.Core.MediaCover;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Http.REST.Attributes;
 using NzbDrone.SignalR;
@@ -19,14 +20,17 @@ namespace Readarr.Api.V1.Manga
     public class MangaController : RestControllerWithSignalR<MangaResource, MangaSeries>
     {
         private readonly IMangaSeriesService _mangaService;
+        private readonly IMapCoversToLocal _coverMapper;
         private static readonly HttpClient _httpClient = new HttpClient();
 
         public MangaController(
             IMangaSeriesService mangaService,
+            IMapCoversToLocal coverMapper,
             IBroadcastSignalRMessage signalRBroadcaster)
             : base(signalRBroadcaster)
         {
             _mangaService = mangaService;
+            _coverMapper = coverMapper;
 
             SharedValidator.RuleFor(s => s.Title).NotEmpty();
             SharedValidator.RuleFor(s => s.Path).NotEmpty();
@@ -51,7 +55,20 @@ namespace Readarr.Api.V1.Manga
         public ActionResult<MangaResource> AddManga([FromBody] MangaResource mangaResource)
         {
             var series = _mangaService.AddSeries(mangaResource.ToModel());
-            return Created(series.Id);
+            var resource = series.ToResource();
+
+            // Map cover URL to local path after download
+            if (resource.CoverUrl != null)
+            {
+                var covers = new List<NzbDrone.Core.MediaCover.MediaCover>
+                {
+                    new NzbDrone.Core.MediaCover.MediaCover(NzbDrone.Core.MediaCover.MediaCoverTypes.Cover, resource.CoverUrl)
+                };
+                _coverMapper.ConvertToLocalUrls(series.Id, NzbDrone.Core.MediaCover.MediaCoverEntity.Manga, covers);
+                resource.CoverUrl = covers[0].Url;
+            }
+
+            return Created(series.Id, resource);
         }
 
         [RestPutById]

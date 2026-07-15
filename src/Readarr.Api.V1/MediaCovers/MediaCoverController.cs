@@ -67,6 +67,25 @@ namespace Readarr.Api.V1.MediaCovers
             return PhysicalFile(filePath, GetContentType(filePath));
         }
 
+        [HttpGet(@"manga/{mangaId:int}/{filename:regex((.+)\.(jpg|png|gif))}")]
+        public IActionResult GetMangaMediaCover(int mangaId, string filename)
+        {
+            var filePath = Path.Combine(_appFolderInfo.GetAppDataPath(), "MediaCover", "Manga", mangaId.ToString(), filename);
+
+            if (!_diskProvider.FileExists(filePath) || _diskProvider.GetFileSize(filePath) == 0)
+            {
+                var basefilePath = RegexResizedImage.Replace(filePath, "");
+                if (basefilePath == filePath || !_diskProvider.FileExists(basefilePath))
+                {
+                    return NotFound();
+                }
+
+                filePath = basefilePath;
+            }
+
+            return PhysicalFile(filePath, GetContentType(filePath));
+        }
+
         private string GetContentType(string filePath)
         {
             if (!_mimeTypeProvider.TryGetContentType(filePath, out var contentType))
