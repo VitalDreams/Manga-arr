@@ -68,6 +68,7 @@ namespace NzbDrone.Core.Manga
             result = result.Replace("$Author", metadata?.Author ?? "Unknown");
             result = result.Replace("$Publisher", metadata?.Publisher ?? "Unknown");
             result = result.Replace("$Language", chapter?.Language ?? "en");
+            result = result.Replace("$LanguageISO", MapLanguageToISO(metadata?.OriginalLanguage));
 
             if (volume != null)
             {
@@ -80,6 +81,23 @@ namespace NzbDrone.Core.Manga
             }
 
             return result;
+        }
+
+        private string MapLanguageToISO(string language)
+        {
+            if (string.IsNullOrEmpty(language))
+            {
+                return "Unknown";
+            }
+
+            return language.ToLowerInvariant() switch
+            {
+                "ja" => "JP",
+                "ko" => "KR",
+                "zh" => "CN",
+                "en" => "EN",
+                _ => language.ToUpperInvariant()
+            };
         }
 
         private string SanitizeFileName(string name)

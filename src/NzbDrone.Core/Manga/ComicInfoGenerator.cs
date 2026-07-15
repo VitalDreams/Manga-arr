@@ -15,7 +15,7 @@ namespace NzbDrone.Core.Manga
         public ComicInfo GenerateComicInfo(MangaSeries series, Volume volume, Chapter chapter, int pageCount)
         {
             var metadata = series.Metadata?.Value;
-            var isJapanese = metadata?.OriginalLanguage == "ja";
+            var originalLanguage = metadata?.OriginalLanguage ?? "en";
 
             return new ComicInfo
             {
@@ -29,8 +29,8 @@ namespace NzbDrone.Core.Manga
                 Penciller = metadata?.Artist ?? string.Empty,
                 Publisher = metadata?.Publisher ?? string.Empty,
                 Genre = string.Join(", ", metadata?.Genres ?? new List<string>()),
-                LanguageISO = chapter.Language ?? (isJapanese ? "ja" : "en"),
-                Manga = isJapanese ? "YesAndRightToLeft" : "Yes",
+                LanguageISO = originalLanguage,
+                Manga = GetReadingDirection(originalLanguage),
                 Web = GetMangaDexUrl(series),
                 AgeRating = MapContentRating(metadata?.ContentRating),
                 PageCount = pageCount
@@ -47,6 +47,22 @@ namespace NzbDrone.Core.Manga
                 serializer.Serialize(stringWriter, comicInfo);
                 return stringWriter.ToString();
             }
+        }
+
+        private string GetReadingDirection(string language)
+        {
+            if (string.IsNullOrEmpty(language))
+            {
+                return "Yes";
+            }
+
+            return language.ToLowerInvariant() switch
+            {
+                "ja" => "YesAndRightToLeft",
+                "ko" => "YesAndRightToLeft",
+                "zh" => "YesAndRightToLeft",
+                _ => "Yes"
+            };
         }
 
         private string GetMangaDexUrl(MangaSeries series)
@@ -72,6 +88,7 @@ namespace NzbDrone.Core.Manga
                 "safe" => "Everyone",
                 "suggestive" => "Teen",
                 "erotica" => "Mature",
+                "violence" => "Teen",
                 _ => "Unknown"
             };
         }
