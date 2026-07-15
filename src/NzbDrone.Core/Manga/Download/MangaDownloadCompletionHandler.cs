@@ -318,7 +318,7 @@ namespace NzbDrone.Core.Manga.Download
             if (_diskProvider.FolderExists(path))
             {
                 // Scan directory for images
-                var files = _diskProvider.GetFiles(path, SearchOption.AllDirectories);
+                var files = _diskProvider.GetFiles(path, true);
                 images = files.Where(f => imageExtensions.Contains(Path.GetExtension(f)))
                               .OrderBy(f => f)
                               .ToList();
@@ -354,7 +354,7 @@ namespace NzbDrone.Core.Manga.Download
 
             if (_diskProvider.FolderExists(outputPath))
             {
-                var allFiles = _diskProvider.GetFiles(outputPath, SearchOption.AllDirectories);
+                var allFiles = _diskProvider.GetFiles(outputPath, true);
 
                 // Prioritize CBZ/archive files
                 var archiveFiles = allFiles.Where(f => mangaExtensions.Contains(Path.GetExtension(f))).ToList();

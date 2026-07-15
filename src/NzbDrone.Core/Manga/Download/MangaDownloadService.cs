@@ -65,7 +65,7 @@ namespace NzbDrone.Core.Manga.Download
 
                 var remoteBook = BuildRemoteBook(title, downloadUrl, protocol, series, volume);
 
-                var downloadId = downloadClient.Download(remoteBook, null).GetAwaiter().GetResult();
+                var downloadId = await downloadClient.Download(remoteBook, null);
 
                 if (string.IsNullOrEmpty(downloadId))
                 {

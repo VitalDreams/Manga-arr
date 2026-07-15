@@ -1,6 +1,9 @@
 using DryIoc;
+using Microsoft.Extensions.Hosting;
 using NzbDrone.Core.Manga.Connectors;
+using NzbDrone.Core.Manga.Download;
 using NzbDrone.Core.Manga.Import;
+using NzbDrone.Core.Manga.Monitoring;
 
 namespace NzbDrone.Core.Manga
 {
@@ -28,6 +31,10 @@ namespace NzbDrone.Core.Manga
             // Register story arc service and repository
             container.Register<IStoryArcRepository, StoryArcRepository>(Reuse.Singleton);
             container.Register<IStoryArcService, StoryArcService>(Reuse.Singleton);
+
+            // Register manga download services (Phase 7)
+            container.Register<IMangaDownloadService, MangaDownloadService>(Reuse.Singleton);
+            container.Register<IHostedService, MangaDownloadCompletionHandler>(Reuse.Singleton, serviceKey: "MangaDownloadCompletionHandler");
 
             return container;
         }

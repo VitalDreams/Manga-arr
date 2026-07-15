@@ -454,6 +454,7 @@ namespace NzbDrone.Core.Manga.Connectors
         public int Peers { get; set; }
         public DateTime PublishDate { get; set; }
         public string MagnetUrl { get; set; }
+        public DownloadProtocol Protocol { get; set; }
     }
 
     public class ProwlarrIndexer
