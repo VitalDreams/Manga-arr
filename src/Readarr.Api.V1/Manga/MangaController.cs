@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using global::System.Threading.Tasks;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Datastore.Events;
@@ -72,7 +73,7 @@ namespace Readarr.Api.V1.Manga
         }
 
         [HttpGet("cover")]
-        public async System.Threading.Tasks.Task<IActionResult> GetCover([FromQuery] string url)
+        public async Task<IActionResult> GetCover([FromQuery] string url)
         {
             if (string.IsNullOrEmpty(url) || !url.StartsWith("https://uploads.mangadex.org/"))
             {
