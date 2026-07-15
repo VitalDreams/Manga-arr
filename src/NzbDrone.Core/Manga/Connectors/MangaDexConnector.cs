@@ -33,16 +33,16 @@ namespace NzbDrone.Core.Manga.Connectors
             return response?.Data?.Select(m => new MangaSearchResult
             {
                 ForeignMangaId = m.Id,
-                Title = m.Attributes.Title.GetValueOrDefault("en") ?? m.Attributes.Title.Values.FirstOrDefault(),
-                Description = m.Attributes.Description.GetValueOrDefault("en") ?? m.Attributes.Description.Values.FirstOrDefault(),
+                Title = m.Attributes?.Title?.GetValueOrDefault("en") ?? m.Attributes?.Title?.Values.FirstOrDefault(),
+                Description = m.Attributes?.Description?.GetValueOrDefault("en") ?? m.Attributes?.Description?.Values.FirstOrDefault(),
                 Author = m.Relationships?.FirstOrDefault(r => r.Type == "author")?.Attributes?.Name,
                 Artist = m.Relationships?.FirstOrDefault(r => r.Type == "artist")?.Attributes?.Name,
-                Status = m.Attributes.Status,
-                Demographic = m.Attributes.PublicationDemographic,
-                Year = m.Attributes.Year ?? 0,
+                Status = m.Attributes?.Status,
+                Demographic = m.Attributes?.PublicationDemographic,
+                Year = m.Attributes?.Year ?? 0,
                 CoverUrl = GetCoverUrl(m),
-                Genres = m.Attributes.Tags?.Where(t => t.Attributes?.Group == "genre").Select(t => t.Attributes.Name).ToList() ?? new List<string>(),
-                ContentRating = m.Attributes.ContentRating
+                Genres = m.Attributes?.Tags?.Where(t => t.Attributes?.Group == "genre").Select(t => t.Attributes?.Name).ToList() ?? new List<string>(),
+                ContentRating = m.Attributes?.ContentRating
             }).ToList();
         }
 
@@ -50,22 +50,27 @@ namespace NzbDrone.Core.Manga.Connectors
         {
             var url = $"{MangaDexApiUrl}/manga/{foreignMangaId}?includes[]=author&includes[]=artist&includes[]=cover_art";
             var response = await GetAsync<MangaDexResponseSingle<MangaDexManga>>(url);
-            var m = response.Data;
+            var m = response?.Data;
+
+            if (m == null)
+            {
+                return null;
+            }
 
             return new MangaMetadata
             {
                 ForeignMangaId = m.Id,
-                Title = m.Attributes.Title.GetValueOrDefault("en") ?? m.Attributes.Title.Values.FirstOrDefault(),
-                Description = m.Attributes.Description.GetValueOrDefault("en") ?? m.Attributes.Description.Values.FirstOrDefault(),
+                Title = m.Attributes?.Title?.GetValueOrDefault("en") ?? m.Attributes?.Title?.Values.FirstOrDefault(),
+                Description = m.Attributes?.Description?.GetValueOrDefault("en") ?? m.Attributes?.Description?.Values.FirstOrDefault(),
                 Author = m.Relationships?.FirstOrDefault(r => r.Type == "author")?.Attributes?.Name,
                 Artist = m.Relationships?.FirstOrDefault(r => r.Type == "artist")?.Attributes?.Name,
-                OriginalLanguage = m.Attributes.OriginalLanguage,
-                Demographic = m.Attributes.PublicationDemographic,
-                Status = m.Attributes.Status,
-                ContentRating = m.Attributes.ContentRating,
-                Year = m.Attributes.Year ?? 0,
-                Genres = m.Attributes.Tags?.Where(t => t.Attributes?.Group == "genre").Select(t => t.Attributes.Name).ToList() ?? new List<string>(),
-                Tags = m.Attributes.Tags?.Where(t => t.Attributes?.Group == "theme").Select(t => t.Attributes.Name).ToList() ?? new List<string>(),
+                OriginalLanguage = m.Attributes?.OriginalLanguage,
+                Demographic = m.Attributes?.PublicationDemographic,
+                Status = m.Attributes?.Status,
+                ContentRating = m.Attributes?.ContentRating,
+                Year = m.Attributes?.Year ?? 0,
+                Genres = m.Attributes?.Tags?.Where(t => t.Attributes?.Group == "genre").Select(t => t.Attributes?.Name).ToList() ?? new List<string>(),
+                Tags = m.Attributes?.Tags?.Where(t => t.Attributes?.Group == "theme").Select(t => t.Attributes?.Name).ToList() ?? new List<string>(),
                 CoverUrl = GetCoverUrl(m),
                 LastInfoSync = DateTime.UtcNow
             };
@@ -78,7 +83,7 @@ namespace NzbDrone.Core.Manga.Connectors
 
             var volumeChapters = new Dictionary<int, List<string>>();
 
-            if (response.Volumes != null)
+            if (response?.Volumes != null)
             {
                 foreach (var volume in response.Volumes)
                 {
@@ -103,16 +108,16 @@ namespace NzbDrone.Core.Manga.Connectors
 
             var response = await GetAsync<MangaDexResponse<MangaDexChapter>>(url);
 
-            return response.Data.Select(c => new ChapterInfo
+            return response?.Data?.Select(c => new ChapterInfo
             {
                 ForeignChapterId = c.Id,
-                Title = c.Attributes.Title ?? $"Chapter {c.Attributes.Chapter}",
-                ChapterNumber = decimal.TryParse(c.Attributes.Chapter, out var num) ? num : 0,
+                Title = c.Attributes?.Title ?? $"Chapter {c.Attributes?.Chapter}",
+                ChapterNumber = decimal.TryParse(c.Attributes?.Chapter, out var num) ? num : 0,
                 VolumeNumber = volumeNumber,
-                Language = c.Attributes.TranslatedLanguage,
+                Language = c.Attributes?.TranslatedLanguage,
                 ScanlationGroup = c.Relationships?.FirstOrDefault(r => r.Type == "scanlation_group")?.Attributes?.Name,
-                PageCount = c.Attributes.Pages,
-                ReleaseDate = c.Attributes.PublishAt
+                PageCount = c.Attributes?.Pages ?? 0,
+                ReleaseDate = c.Attributes?.PublishAt
             }).ToList();
         }
 
@@ -121,12 +126,13 @@ namespace NzbDrone.Core.Manga.Connectors
             var url = $"{MangaDexApiUrl}/at-home/server/{foreignChapterId}";
             var response = await GetAsync<MangaDexAtHome>(url);
 
+            var baseUrl = response?.BaseUrl;
             return new ChapterPages
             {
                 ForeignChapterId = foreignChapterId,
-                BaseUrl = response.BaseUrl,
-                PageUrls = response.Chapter?.Data?.Select(f => $"{response.BaseUrl}/data/{response.Chapter.Hash}/{f}").ToList() ?? new List<string>(),
-                Hash = response.Chapter?.Hash
+                BaseUrl = baseUrl,
+                PageUrls = response?.Chapter?.Data?.Select(f => $"{baseUrl}/data/{response.Chapter.Hash}/{f}").ToList() ?? new List<string>(),
+                Hash = response?.Chapter?.Hash
             };
         }
 
@@ -134,7 +140,7 @@ namespace NzbDrone.Core.Manga.Connectors
         {
             var url = $"{MangaDexApiUrl}/manga/{foreignMangaId}?includes[]=cover_art";
             var response = await GetAsync<MangaDexResponseSingle<MangaDexManga>>(url);
-            return GetCoverUrl(response.Data);
+            return response?.Data != null ? GetCoverUrl(response.Data) : null;
         }
 
         private string GetCoverUrl(MangaDexManga manga)
@@ -144,12 +150,17 @@ namespace NzbDrone.Core.Manga.Connectors
             return fileName != null ? $"https://uploads.mangadex.org/covers/{manga.Id}/{fileName}" : null;
         }
 
+        private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        };
+
         private async Task<T> GetAsync<T>(string url)
         {
             await Task.Delay(RateLimitDelayMs); // Rate limiting
             var request = new HttpRequestBuilder(url).Build();
             var response = await _httpClient.GetAsync(request);
-            return JsonSerializer.Deserialize<T>(response.Content);
+            return JsonSerializer.Deserialize<T>(response.Content, JsonOptions);
         }
     }
 

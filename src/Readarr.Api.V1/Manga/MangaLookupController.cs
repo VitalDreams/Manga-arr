@@ -20,6 +20,11 @@ namespace Readarr.Api.V1.Manga
         public object Search([FromQuery] string term)
         {
             var searchResults = _mangaDexConnector.SearchAsync(term).GetAwaiter().GetResult();
+            if (searchResults == null)
+            {
+                return new List<MangaLookupResource>();
+            }
+
             return searchResults.Select(r => new MangaLookupResource
             {
                 ForeignMangaId = r.ForeignMangaId,
