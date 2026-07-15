@@ -23,17 +23,13 @@ RUN yarn build
 
 # Build backend using Readarr's msbuild approach
 WORKDIR /src/src
-ENV SENTRY_SKIP_RELEASE=true
-ENV SENTRY_AUTH_TOKEN=
 RUN dotnet msbuild -restore Readarr.sln \
     -p:Configuration=Release \
     -p:Platform=Posix \
     -p:RuntimeIdentifiers=linux-x64 \
     -t:PublishAllRids \
     -p:TreatWarningsAsErrors=false \
-    -p:EnableSentryRelease=false \
-    -p:SentryUploadSymbols=false \
-    -nowarn:NU1902,NU1903,SA1600,SA1309,SA1101,SA1202,SA1633
+    -nowarn:NU1902,NU1903
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS runtime
