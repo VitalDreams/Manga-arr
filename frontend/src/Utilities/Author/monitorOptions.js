@@ -1,10 +1,10 @@
 const monitorOptions = [
-  { key: 'all', value: 'All Books' },
-  { key: 'future', value: 'Future Books' },
-  { key: 'missing', value: 'Missing Books' },
-  { key: 'existing', value: 'Existing Books' },
-  { key: 'first', value: 'Only First Book' },
-  { key: 'latest', value: 'Only Latest Book' },
+  { key: 'all', value: 'All Volumes' },
+  { key: 'future', value: 'Future Volumes' },
+  { key: 'missing', value: 'Missing Volumes' },
+  { key: 'existing', value: 'Existing Volumes' },
+  { key: 'first', value: 'Only First Volume' },
+  { key: 'latest', value: 'Only Latest Volume' },
   { key: 'none', value: 'None' }
 ];
 
