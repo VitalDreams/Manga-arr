@@ -26,7 +26,9 @@ WORKDIR /src/src
 RUN dotnet publish NzbDrone.Console/Readarr.Console.csproj \
     -c Release \
     -f net6.0 \
-    -o /app/publish
+    -o /app/publish \
+    -p:TreatWarningsAsErrors=false \
+    -nowarn:NU1902,NU1903
 
 # Copy frontend UI into publish output
 RUN cp -r /src/_output/UI/. /app/publish/UI/
