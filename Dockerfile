@@ -31,7 +31,7 @@ RUN dotnet msbuild -restore Readarr.sln \
     -p:RuntimeIdentifiers=linux-x64 \
     -t:PublishAllRids \
     -p:TreatWarningsAsErrors=false \
-    -nowarn:NU1902,NU1903
+    -nowarn:NU1902,NU1903; echo EXIT_CODE=$?; test -f /src/_output/net6.0/linux-x64/Readarr.dll && echo OUTPUT_EXISTS || echo OUTPUT_MISSING
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS runtime
