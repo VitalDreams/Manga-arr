@@ -31,7 +31,7 @@ RUN dotnet msbuild -restore Readarr.sln \
     -p:RuntimeIdentifiers=linux-x64 \
     -t:PublishAllRids \
     -p:TreatWarningsAsErrors=false \
-    -nowarn:NU1902,NU1903
+    -nowarn:NU1902,NU1903 > /tmp/build.log 2>&1 || (cat /tmp/build.log | grep -i 'error' | head -30; exit 1)
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS runtime
