@@ -150,7 +150,7 @@ namespace NzbDrone.Core.Manga.Connectors
             return fileName != null ? $"https://uploads.mangadex.org/covers/{manga.Id}/{fileName}" : null;
         }
 
-        private async Task<T> GetAsync<T>(string url)
+        private async Task<T> GetAsync<T>(string url) where T : new()
         {
             await Task.Delay(RateLimitDelayMs); // Rate limiting
             var request = new HttpRequestBuilder(url).Build();
