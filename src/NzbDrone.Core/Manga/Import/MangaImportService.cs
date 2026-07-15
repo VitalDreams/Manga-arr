@@ -1,0 +1,301 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using NLog;
+using NzbDrone.Common.Disk;
+using NzbDrone.Core.Manga.Connectors;
+using NzbDrone.Core.Messaging.Events;
+
+namespace NzbDrone.Core.Manga.Import
+{
+    public enum MangaImportMode
+    {
+        InPlace,
+        Move
+    }
+
+    public interface IMangaImportService
+    {
+        MangaSeries ImportSeries(string directoryPath, string foreignMangaId, MangaImportMode importMode = MangaImportMode.InPlace);
+        MangaFile ImportFile(string filePath, int seriesId, int volumeId);
+    }
+
+    public class MangaImportService : IMangaImportService
+    {
+        private readonly IMangaFileScanner _fileScanner;
+        private readonly IMangaMetadataConnector _metadataConnector;
+        private readonly IMangaSeriesService _seriesService;
+        private readonly IMangaSeriesRepository _seriesRepository;
+        private readonly IVolumeRepository _volumeRepository;
+        private readonly IMangaFileService _fileService;
+        private readonly ISeriesMetadataGenerator _metadataGenerator;
+        private readonly IMangaNamingService _namingService;
+        private readonly IDiskProvider _diskProvider;
+        private readonly IEventAggregator _eventAggregator;
+        private readonly Logger _logger;
+
+        public MangaImportService(
+            IMangaFileScanner fileScanner,
+            IMangaMetadataConnector metadataConnector,
+            IMangaSeriesService seriesService,
+            IMangaSeriesRepository seriesRepository,
+            IVolumeRepository volumeRepository,
+            IMangaFileService fileService,
+            ISeriesMetadataGenerator metadataGenerator,
+            IMangaNamingService namingService,
+            IDiskProvider diskProvider,
+            IEventAggregator eventAggregator,
+            Logger logger)
+        {
+            _fileScanner = fileScanner;
+            _metadataConnector = metadataConnector;
+            _seriesService = seriesService;
+            _seriesRepository = seriesRepository;
+            _volumeRepository = volumeRepository;
+            _fileService = fileService;
+            _metadataGenerator = metadataGenerator;
+            _namingService = namingService;
+            _diskProvider = diskProvider;
+            _eventAggregator = eventAggregator;
+            _logger = logger;
+        }
+
+        public MangaSeries ImportSeries(string directoryPath, string foreignMangaId, MangaImportMode importMode = MangaImportMode.InPlace)
+        {
+            _logger.Info("Importing manga series from {0} with MangaDex ID {1} (mode: {2})", directoryPath, foreignMangaId, importMode);
+
+            // 1. Scan directory for CBZ files
+            var scannedFiles = _fileScanner.ScanDirectory(directoryPath);
+            if (scannedFiles.Count == 0)
+            {
+                _logger.Warn("No CBZ files found in {0}", directoryPath);
+                return null;
+            }
+
+            // 2. Fetch metadata from MangaDex
+            var metadata = FetchMetadata(foreignMangaId);
+            if (metadata == null)
+            {
+                _logger.Error("Failed to fetch metadata for MangaDex ID {0}", foreignMangaId);
+                return null;
+            }
+
+            // 3. Create MangaSeries + MangaMetadata in DB
+            var series = CreateSeries(directoryPath, foreignMangaId, metadata);
+
+            // 4. Create volume and file records
+            var volumeGroups = scannedFiles
+                .Where(f => f.VolumeNumber.HasValue)
+                .GroupBy(f => f.VolumeNumber.Value)
+                .OrderBy(g => g.Key)
+                .ToList();
+
+            foreach (var volumeGroup in volumeGroups)
+            {
+                var volumeNumber = volumeGroup.Key;
+                var volume = CreateVolume(series, metadata, volumeNumber);
+
+                foreach (var scannedFile in volumeGroup)
+                {
+                    CreateMangaFile(scannedFile, series, volume, importMode);
+                }
+            }
+
+            // Handle files with no volume number
+            var ungroupedFiles = scannedFiles.Where(f => !f.VolumeNumber.HasValue).ToList();
+            if (ungroupedFiles.Count > 0)
+            {
+                _logger.Warn("{0} files could not be assigned to a volume (no volume number parsed)", ungroupedFiles.Count);
+            }
+
+            // 5. Write series.json companion file
+            _metadataGenerator.WriteSeriesMetadataFile(series);
+
+            // 6. Publish MangaSeriesAddedEvent
+            _eventAggregator.PublishEvent(new MangaSeriesAddedEvent(series));
+
+            _logger.Info("Successfully imported manga series '{0}' with {1} volumes from {2}", series.Name, volumeGroups.Count, directoryPath);
+            return series;
+        }
+
+        public MangaFile ImportFile(string filePath, int seriesId, int volumeId)
+        {
+            _logger.Info("Importing single file {0} into series {1}, volume {2}", filePath, seriesId, volumeId);
+
+            if (!_diskProvider.FileExists(filePath))
+            {
+                _logger.Error("File does not exist: {0}", filePath);
+                return null;
+            }
+
+            var scannedFiles = _fileScanner.ScanDirectory(Path.GetDirectoryName(filePath));
+            var scanned = scannedFiles.FirstOrDefault(f => f.FilePath == filePath);
+
+            if (scanned == null)
+            {
+                // Fallback: create a basic scanned entry
+                var fileInfo = _diskProvider.GetFileInfo(filePath);
+                scanned = new ScannedMangaFile
+                {
+                    FileName = fileInfo.Name,
+                    FilePath = filePath,
+                    FileSize = fileInfo.Length
+                };
+            }
+
+            var mangaFile = new MangaFile
+            {
+                VolumeId = volumeId,
+                MangaSeriesId = seriesId,
+                Path = filePath,
+                FileName = scanned.FileName,
+                RelativePath = scanned.FileName,
+                Size = scanned.FileSize,
+                AddedAt = DateTime.UtcNow,
+                IsVolumePack = false
+            };
+
+            _fileService.Add(mangaFile);
+            _logger.Info("Imported file {0} into series {1}, volume {2}", scanned.FileName, seriesId, volumeId);
+            return mangaFile;
+        }
+
+        private MangaMetadata FetchMetadata(string foreignMangaId)
+        {
+            try
+            {
+                return _metadataConnector.GetMangaMetadataAsync(foreignMangaId).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error fetching metadata from MangaDex for {0}", foreignMangaId);
+                return null;
+            }
+        }
+
+        private MangaSeries CreateSeries(string directoryPath, string foreignMangaId, MangaMetadata metadata)
+        {
+            var series = new MangaSeries
+            {
+                ForeignMangaId = foreignMangaId,
+                Path = directoryPath,
+                RootFolderPath = Path.GetDirectoryName(directoryPath),
+                CleanName = metadata.Title?.ToLowerInvariant().Replace(" ", "") ?? string.Empty,
+                Monitored = true,
+                MonitorNewItems = NewItemMonitorTypes.All,
+                DownloadMode = DownloadMode.VolumePack,
+                Added = DateTime.UtcNow,
+                QualityProfileId = 1,
+                MetadataProfileId = 1
+            };
+
+            // Set metadata on the series
+            series.Metadata = new MangaMetadata
+            {
+                ForeignMangaId = foreignMangaId,
+                Title = metadata.Title,
+                TitleSlug = metadata.TitleSlug,
+                SortTitle = metadata.SortTitle,
+                Description = metadata.Description,
+                Author = metadata.Author,
+                Artist = metadata.Artist,
+                Publisher = metadata.Publisher,
+                OriginalLanguage = metadata.OriginalLanguage,
+                Demographic = metadata.Demographic,
+                Status = metadata.Status,
+                ContentRating = metadata.ContentRating,
+                Year = metadata.Year,
+                TotalVolumes = metadata.TotalVolumes,
+                TotalChapters = metadata.TotalChapters,
+                Genres = metadata.Genres,
+                Tags = metadata.Tags,
+                Links = metadata.Links,
+                AlternateTitles = metadata.AlternateTitles,
+                Ratings = metadata.Ratings,
+                CoverUrl = metadata.CoverUrl,
+                LastInfoSync = DateTime.UtcNow
+            };
+
+            return _seriesRepository.Insert(series);
+        }
+
+        private Volume CreateVolume(MangaSeries series, MangaMetadata metadata, int volumeNumber)
+        {
+            var volume = new Volume
+            {
+                ForeignVolumeId = $"{metadata.ForeignMangaId}_vol{volumeNumber}",
+                Title = $"Volume {volumeNumber}",
+                TitleSlug = $"volume-{volumeNumber}",
+                VolumeNumber = volumeNumber,
+                CleanTitle = $"volume {volumeNumber}",
+                Monitored = true,
+                AnyEditionOk = true,
+                Added = DateTime.UtcNow,
+                MangaMetadataId = series.MangaMetadataId
+            };
+
+            volume.MangaSeries = new MangaSeries { Id = series.Id };
+            volume.MangaMetadata = new MangaMetadata { Id = series.MangaMetadataId };
+
+            return _volumeRepository.Insert(volume);
+        }
+
+        private void CreateMangaFile(ScannedMangaFile scanned, MangaSeries series, Volume volume, MangaImportMode importMode)
+        {
+            var targetPath = scanned.FilePath;
+
+            if (importMode == MangaImportMode.Move)
+            {
+                targetPath = GetManagedPath(series, scanned);
+                MoveFile(scanned.FilePath, targetPath);
+            }
+
+            var mangaFile = new MangaFile
+            {
+                VolumeId = volume.Id,
+                MangaSeriesId = series.Id,
+                Path = targetPath,
+                FileName = scanned.FileName,
+                RelativePath = Path.GetFileName(targetPath),
+                Size = scanned.FileSize,
+                AddedAt = DateTime.UtcNow,
+                IsVolumePack = true
+            };
+
+            _fileService.Add(mangaFile);
+        }
+
+        private string GetManagedPath(MangaSeries series, ScannedMangaFile scanned)
+        {
+            var seriesFolder = _namingService.GetSeriesFolder(series);
+            var targetDir = Path.Combine(series.RootFolderPath, seriesFolder);
+
+            if (!_diskProvider.FolderExists(targetDir))
+            {
+                _diskProvider.CreateFolder(targetDir);
+            }
+
+            return Path.Combine(targetDir, scanned.FileName);
+        }
+
+        private void MoveFile(string source, string destination)
+        {
+            try
+            {
+                if (_diskProvider.FileExists(destination))
+                {
+                    _logger.Warn("Destination file already exists, skipping move: {0}", destination);
+                    return;
+                }
+
+                _diskProvider.MoveFile(source, destination);
+                _logger.Debug("Moved file from {0} to {1}", source, destination);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to move file from {0} to {1}", source, destination);
+            }
+        }
+    }
+}

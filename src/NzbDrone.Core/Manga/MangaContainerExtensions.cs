@@ -1,5 +1,6 @@
 using DryIoc;
 using NzbDrone.Core.Manga.Connectors;
+using NzbDrone.Core.Manga.Import;
 
 namespace NzbDrone.Core.Manga
 {
@@ -16,6 +17,13 @@ namespace NzbDrone.Core.Manga
             // Register manga file service and repository
             container.Register<IMangaFileRepository, MangaFileRepository>(Reuse.Singleton);
             container.Register<IMangaFileService, MangaFileService>(Reuse.Singleton);
+
+            // Register volume repository
+            container.Register<IVolumeRepository, VolumeRepository>(Reuse.Singleton);
+
+            // Register manga import services
+            container.Register<IMangaFileScanner, MangaFileScanner>(Reuse.Singleton);
+            container.Register<IMangaImportService, MangaImportService>(Reuse.Singleton);
 
             // Register story arc service and repository
             container.Register<IStoryArcRepository, StoryArcRepository>(Reuse.Singleton);
