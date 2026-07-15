@@ -24,7 +24,7 @@ RUN yarn build
 # Build backend
 WORKDIR /src
 RUN dotnet publish src/NzbDrone.Host/Readarr.Host.csproj \
-    -c Release -f net6.0 -o /app/publish --no-restore \
+    -c Release -f net6.0 -o /app/publish  \
     -p:TreatWarningsAsErrors=false \
     -p:EnableSourceControlManagerQueries=false
 
