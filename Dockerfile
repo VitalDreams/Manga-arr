@@ -29,11 +29,6 @@ RUN dotnet msbuild -restore Readarr.sln \
     -p:RuntimeIdentifiers=linux-x64 \
     -t:PublishAllRids \
     -p:TreatWarningsAsErrors=false \
-    -p:SentryUploadSymbols=false \
-    -p:SentrySkipModuleUpload=true \
-    -p:SentryOrg= \
-    -p:SentryProject= \
-    -p:SentryAuthToken= \
     -nowarn:NU1902,NU1903
 
 # Runtime stage
