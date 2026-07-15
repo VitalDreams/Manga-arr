@@ -26,7 +26,7 @@ namespace NzbDrone.Core.Manga.Connectors
 
         public async Task<List<MangaSearchResult>> SearchAsync(string query, int limit = 10)
         {
-            var url = $"{MangaDexApiUrl}/manga?title={Uri.EscapeDataString(query)}&limit={limit}&includes[]=author&includes[]=artist&cover_art";
+            var url = $"{MangaDexApiUrl}/manga?title={Uri.EscapeDataString(query)}&limit={limit}&includes[]=author&includes[]=artist&includes[]=cover_art";
 
             var response = await GetAsync<MangaDexResponse<MangaDexManga>>(url);
 
@@ -48,7 +48,7 @@ namespace NzbDrone.Core.Manga.Connectors
 
         public async Task<MangaMetadata> GetMangaMetadataAsync(string foreignMangaId)
         {
-            var url = $"{MangaDexApiUrl}/manga/{foreignMangaId}?includes[]=author&includes[]=artist&cover_art";
+            var url = $"{MangaDexApiUrl}/manga/{foreignMangaId}?includes[]=author&includes[]=artist&includes[]=cover_art";
             var response = await GetAsync<MangaDexResponseSingle<MangaDexManga>>(url);
             var m = response.Data;
 
@@ -132,7 +132,7 @@ namespace NzbDrone.Core.Manga.Connectors
 
         public async Task<string> GetCoverUrlAsync(string foreignMangaId)
         {
-            var url = $"{MangaDexApiUrl}/manga/{foreignMangaId}?cover_art";
+            var url = $"{MangaDexApiUrl}/manga/{foreignMangaId}?includes[]=cover_art";
             var response = await GetAsync<MangaDexResponseSingle<MangaDexManga>>(url);
             return GetCoverUrl(response.Data);
         }
