@@ -9,17 +9,17 @@ namespace Readarr.Api.V1.Manga
     [V1ApiController("manga/lookup")]
     public class MangaLookupController : Controller
     {
-        private readonly IMangaMetadataConnector _mangaDexConnector;
+        private readonly IMetadataAggregator _metadataAggregator;
 
-        public MangaLookupController(IMangaMetadataConnector mangaDexConnector)
+        public MangaLookupController(IMetadataAggregator metadataAggregator)
         {
-            _mangaDexConnector = mangaDexConnector;
+            _metadataAggregator = metadataAggregator;
         }
 
         [HttpGet]
         public object Search([FromQuery] string term)
         {
-            var searchResults = _mangaDexConnector.SearchAsync(term).GetAwaiter().GetResult();
+            var searchResults = _metadataAggregator.SearchAsync(term).GetAwaiter().GetResult();
             if (searchResults == null)
             {
                 return new List<MangaLookupResource>();

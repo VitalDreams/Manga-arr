@@ -1,3 +1,5 @@
+import getProxiedCoverUrl from './getProxiedCoverUrl';
+
 function getNewManga(searchResult, payload) {
   const {
     rootFolderPath,
@@ -20,7 +22,7 @@ function getNewManga(searchResult, payload) {
     totalChapters: 0,
     genres: [],
     tags: [],
-    coverUrl: searchResult.coverUrl || '',
+    coverUrl: getProxiedCoverUrl(searchResult.coverUrl) || '',
     rootFolderPath,
     qualityProfileId,
     metadataProfileId,

@@ -9,6 +9,7 @@ import PageContent from 'Components/Page/PageContent';
 import PageContentBody from 'Components/Page/PageContentBody';
 import { icons, kinds } from 'Helpers/Props';
 import getErrorMessage from 'Utilities/Object/getErrorMessage';
+import getProxiedCoverUrl from 'Utilities/Manga/getProxiedCoverUrl';
 import translate from 'Utilities/String/translate';
 import AddNewMangaModal from './Manga/AddNewMangaModal';
 import styles from './AddNewItem.css';
@@ -171,8 +172,7 @@ class AddNewItem extends Component {
                           item.coverUrl ?
                             <img
                               className={styles.mangaCover}
-                              src={item.coverUrl}
-                              crossOrigin='anonymous'
+                              src={getProxiedCoverUrl(item.coverUrl)}
                             /> :
                             null
                         }

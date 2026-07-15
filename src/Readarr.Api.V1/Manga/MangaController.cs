@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Datastore.Events;
@@ -16,6 +18,7 @@ namespace Readarr.Api.V1.Manga
     public class MangaController : RestControllerWithSignalR<MangaResource, MangaSeries>
     {
         private readonly IMangaSeriesService _mangaService;
+        private static readonly HttpClient _httpClient = new HttpClient();
 
         public MangaController(
             IMangaSeriesService mangaService,
@@ -66,6 +69,28 @@ namespace Readarr.Api.V1.Manga
         public void DeleteManga(int id, bool deleteFiles = false)
         {
             _mangaService.DeleteSeries(id, deleteFiles);
+        }
+
+        [HttpGet("cover")]
+        public async System.Threading.Tasks.Task<IActionResult> GetCover([FromQuery] string url)
+        {
+            if (string.IsNullOrEmpty(url) || !url.StartsWith("https://uploads.mangadex.org/"))
+            {
+                return BadRequest("Invalid cover URL");
+            }
+
+            try
+            {
+                var response = await _httpClient.GetAsync(url);
+                response.EnsureSuccessStatusCode();
+                var bytes = await response.Content.ReadAsByteArrayAsync();
+                var contentType = response.Content.Headers.ContentType?.MediaType ?? "image/jpeg";
+                return File(bytes, contentType);
+            }
+            catch (Exception)
+            {
+                return StatusCode(502, "Failed to fetch cover image");
+            }
         }
     }
 }
