@@ -21,14 +21,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN yarn install --frozen-lockfile --network-timeout 120000
 RUN yarn build
 
-# Build backend - publish just the Console project to avoid Sentry NuGet targets
-WORKDIR /src/src
-RUN dotnet publish NzbDrone.Console/Readarr.Console.csproj -c Release -f net6.0 -o /app/publish -p:AssemblyName=Readarr -p:TreatWarningsAsErrors=false -nowarn:NU1902,NU1903 -v minimal
-
-# Copy frontend UI into publish output
-RUN ls -la /src/_output/ 2>&1 || echo 'NO _output DIR'
-RUN find /src -name 'index.html' -path '*/UI/*' 2>/dev/null || echo 'NO UI index.html found'
-RUN cp -r /src/_output/UI/. /app/publish/UI/ || (echo 'UI not at /src/_output/UI, checking alternatives...' && ls -la /src/frontend/dist/ 2>&1 && cp -r /src/frontend/dist/. /app/publish/UI/ || echo 'No UI output found')
+# Build backend - msbuild on Host project (pulls in all deps, skips test projects and Sentry solution targets)
+WORKDIR /src
+RUN dotnet msbuild -restore src/NzbDrone.Host/Readarr.Host.csproj \
+    -p:Configuration=Release \
+    -p:Platform=Posix \
+    -p:RuntimeIdentifiers=linux-x64 \
+    -p:TreatWarningsAsErrors=false \
+    -nowarn:NU1902,NU1903 \
+    -v minimal
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS runtime
@@ -44,7 +45,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN mkdir -p /config /config/logs /manga /tmp/manga-arr
 
 # Copy build output (includes UI)
-COPY --from=build /app/publish/. /app/
+COPY --from=build /src/_output/. /app/
 
 # Expose port (8192 to avoid conflict with Sonarr on 8989)
 EXPOSE 8192
