@@ -21,19 +21,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN yarn install --frozen-lockfile --network-timeout 120000
 RUN yarn build
 
-# Build backend using Readarr's msbuild approach
+# Build backend - publish just the Console project to avoid Sentry NuGet targets
 WORKDIR /src/src
-RUN dotnet msbuild -restore Readarr.sln \
-    -p:Configuration=Release \
-    -p:Platform=Posix \
-    -p:RuntimeIdentifiers=linux-x64 \
-    -t:PublishAllRids \
-    -p:TreatWarningsAsErrors=false \
-    -nowarn:NU1902,NU1903 \
-    || true
+RUN dotnet publish NzbDrone.Console/Readarr.Console.csproj \
+    -c Release \
+    -f net6.0 \
+    -o /app/publish
 
-# Verify the build actually produced output
-RUN test -f /src/_output/net6.0/linux-x64/Readarr.dll || (echo 'BUILD ACTUALLY FAILED' && exit 1)
+# Copy frontend UI into publish output
+RUN cp -r /src/_output/UI/. /app/publish/UI/
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS runtime
@@ -48,11 +44,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Create directories
 RUN mkdir -p /config /config/logs /manga /tmp/manga-arr
 
-# Copy build output
-COPY --from=build /src/_output/net6.0/linux-x64/. /app/
-
-# Copy frontend UI
-COPY --from=build /src/_output/UI/. /app/UI/
+# Copy build output (includes UI)
+COPY --from=build /app/publish/. /app/
 
 # Expose port (8192 to avoid conflict with Sonarr on 8989)
 EXPOSE 8192
