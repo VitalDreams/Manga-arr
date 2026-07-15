@@ -24,6 +24,7 @@ namespace NzbDrone.Core.Manga
         private readonly IMangaNamingService _namingService;
         private readonly IVolumePackTracker _volumePackTracker;
         private readonly IMangaFileService _mangaFileService;
+        private readonly ISeriesMetadataGenerator _metadataGenerator;
         private static readonly HttpClient _httpClient = new HttpClient();
         private readonly IDiskProvider _diskProvider;
         private readonly Logger _logger;
@@ -34,6 +35,7 @@ namespace NzbDrone.Core.Manga
             IMangaNamingService namingService,
             IVolumePackTracker volumePackTracker,
             IMangaFileService mangaFileService,
+            ISeriesMetadataGenerator metadataGenerator,
             IDiskProvider diskProvider,
             Logger logger)
         {
@@ -42,6 +44,7 @@ namespace NzbDrone.Core.Manga
             _namingService = namingService;
             _volumePackTracker = volumePackTracker;
             _mangaFileService = mangaFileService;
+            _metadataGenerator = metadataGenerator;
             _diskProvider = diskProvider;
             _logger = logger;
         }
@@ -160,6 +163,8 @@ namespace NzbDrone.Core.Manga
 
                 _mangaFileService.Add(mangaFile);
 
+                _metadataGenerator.WriteSeriesMetadataFile(series);
+
                 return cbzPath;
             }
             finally
@@ -204,6 +209,8 @@ namespace NzbDrone.Core.Manga
                 };
 
                 _mangaFileService.Add(mangaFile);
+
+                _metadataGenerator.WriteSeriesMetadataFile(series);
 
                 return cbzPath;
             }

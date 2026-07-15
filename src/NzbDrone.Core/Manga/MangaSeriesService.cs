@@ -17,15 +17,18 @@ namespace NzbDrone.Core.Manga
     public class MangaSeriesService : IMangaSeriesService
     {
         private readonly IMangaSeriesRepository _seriesRepository;
+        private readonly ISeriesMetadataGenerator _metadataGenerator;
         private readonly IEventAggregator _eventAggregator;
         private readonly Logger _logger;
 
         public MangaSeriesService(
             IMangaSeriesRepository seriesRepository,
+            ISeriesMetadataGenerator metadataGenerator,
             IEventAggregator eventAggregator,
             Logger logger)
         {
             _seriesRepository = seriesRepository;
+            _metadataGenerator = metadataGenerator;
             _eventAggregator = eventAggregator;
             _logger = logger;
         }
@@ -44,6 +47,9 @@ namespace NzbDrone.Core.Manga
         {
             var series = _seriesRepository.Insert(newSeries);
             _eventAggregator.PublishEvent(new MangaSeriesAddedEvent(series));
+
+            _metadataGenerator.WriteSeriesMetadataFile(series);
+
             return series;
         }
 
@@ -51,6 +57,9 @@ namespace NzbDrone.Core.Manga
         {
             var updated = _seriesRepository.Update(series);
             _eventAggregator.PublishEvent(new MangaSeriesUpdatedEvent(updated));
+
+            _metadataGenerator.WriteSeriesMetadataFile(updated);
+
             return updated;
         }
 
