@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>net6.0</TargetFrameworks>
     <NeutralLanguage>en</NeutralLanguage>
@@ -12,7 +12,7 @@
     <PackageReference Include="NLog.Extensions.Logging" />
     <PackageReference Include="Newtonsoft.Json" />
     <PackageReference Include="NLog" />
-
+    <PackageReference Include="Sentry" />
     <PackageReference Include="SharpZipLib" />
     <PackageReference Include="System.IO.Abstractions" />
     <PackageReference Include="System.Text.Json" />

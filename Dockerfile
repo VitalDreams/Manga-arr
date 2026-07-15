@@ -21,12 +21,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN yarn install --frozen-lockfile --network-timeout 120000
 RUN yarn build
 
-# Build backend
-WORKDIR /src
-RUN dotnet publish src/NzbDrone.Host/Readarr.Host.csproj \
-    -c Release -f net6.0 -o /app/publish  \
+# Build backend using Readarr's msbuild approach
+WORKDIR /src/src
+RUN dotnet msbuild -restore Readarr.sln \
+    -p:Configuration=Release \
+    -p:Platform=Posix \
+    -p:RuntimeIdentifiers=linux-x64 \
+    -t:PublishAllRids \
     -p:TreatWarningsAsErrors=false \
-    -p:EnableSourceControlManagerQueries=false
+    -p:EnableSourceControlManagerQueries=false \
+    -nowarn:NU1902,NU1903
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS runtime
@@ -42,7 +46,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN mkdir -p /config /config/logs /manga /tmp/manga-arr
 
 # Copy build output
-COPY --from=build /app/publish/. /app/
+COPY --from=build /src/_output/net6.0/linux-x64/. /app/
 
 # Copy frontend UI
 COPY --from=build /src/_output/UI/. /app/UI/
