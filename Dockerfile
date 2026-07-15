@@ -21,14 +21,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN yarn install --frozen-lockfile --network-timeout 120000
 RUN yarn build
 
-# Build backend - target Console project directly to produce Readarr.dll
-WORKDIR /src
-RUN dotnet msbuild -restore src/NzbDrone.Console/Readarr.Console.csproj \
-    -t:Publish \
-    -p:TargetFramework=net6.0 \
+# Build backend - nuclear option: strip Sentry before build
+WORKDIR /src/src
+RUN sed -i '/PackageReference.*Sentry/d' src/NzbDrone.Common/Readarr.Common.csproj
+RUN dotnet nuget locals all --clear
+RUN dotnet msbuild -restore Readarr.sln \
     -p:Configuration=Release \
     -p:Platform=Posix \
     -p:RuntimeIdentifiers=linux-x64 \
+    -t:PublishAllRids \
     -p:TreatWarningsAsErrors=false \
     -nowarn:NU1902,NU1903
 
