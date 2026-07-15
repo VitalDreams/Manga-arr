@@ -49,6 +49,10 @@ RUN mkdir -p /config /config/logs /manga /tmp/manga-arr
 # Copy build output
 COPY --from=build /src/_output/net6.0/linux-x64/. /app/
 
+# Diagnostic: verify what's in /app after COPY
+RUN ls -la /app/Readarr* 2>&1 || echo 'NO READARR DLL FOUND'
+RUN ls -la /app/ | head -20
+
 # Copy frontend UI
 COPY --from=build /src/_output/UI/. /app/UI/
 
