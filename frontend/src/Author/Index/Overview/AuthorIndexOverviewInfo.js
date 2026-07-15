@@ -94,7 +94,7 @@ function getInfoRowProps(row, props) {
     } = props;
 
     return {
-      title: `Last Book: ${lastBook.title}`,
+      title: `Last Volume: ${lastBook.title}`,
       iconName: icons.CALENDAR,
       label: getRelativeDate(
         lastBook.releaseDate,
@@ -134,16 +134,16 @@ function getInfoRowProps(row, props) {
 
   if (name === 'bookCount') {
     const { bookCount } = props;
-    let books = '1 book';
+    let books = '1 volume';
 
     if (bookCount === 0) {
-      books = 'No books';
+      books = 'No volumes';
     } else if (bookCount > 1) {
-      books = `${bookCount} books`;
+      books = `${bookCount} volumes`;
     }
 
     return {
-      title: 'Book Count',
+      title: 'Volume Count',
       iconName: icons.BOOK,
       label: books
     };

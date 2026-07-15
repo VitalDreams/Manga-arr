@@ -24,7 +24,7 @@ function NoAuthor(props) {
   return (
     <div>
       <div className={styles.message}>
-        {`No ${itemType} found, to get started you'll want to add a new author or book or add an existing library location (Root Folder) and update.`}
+        {`No ${itemType} found. Add your first manga or set up a library location (Root Folder) to get started.`}
       </div>
 
       <div className={styles.buttonContainer}>

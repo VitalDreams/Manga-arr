@@ -246,7 +246,7 @@ class AddNewItem extends Component {
             !term && !hasExistingAuthors ?
               <div className={styles.message}>
                 <div className={styles.noAuthorsText}>
-                  You haven't added any authors yet, do you want to add an existing library location (Root Folder) and update?
+                  You haven't added any manga yet. Add your first manga or set up a library location (Root Folder) to get started.
                 </div>
                 <div>
                   <Button

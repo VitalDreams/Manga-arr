@@ -26,11 +26,11 @@ const links = [
     alias: '/authors',
     children: [
       {
-        title: () => translate('Manga'),
+        title: () => translate('Author'),
         to: '/authors'
       },
       {
-        title: () => translate('Manga'),
+        title: () => translate('Books'),
         to: '/books'
       },
       {

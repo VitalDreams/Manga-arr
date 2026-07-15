@@ -42,7 +42,7 @@ const columns = [
   },
   {
     name: 'bookCount',
-    label: 'Books',
+    label: 'Volumes',
     isSortable: false,
     isVisible: true
   }

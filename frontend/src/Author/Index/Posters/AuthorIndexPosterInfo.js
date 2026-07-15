@@ -68,7 +68,7 @@ function AuthorIndexPosterInfo(props) {
 
     return (
       <div className={styles.info}>
-        {`Next Book ${date}`}
+        {`Next Volume ${date}`}
       </div>
     );
   }
@@ -86,18 +86,18 @@ function AuthorIndexPosterInfo(props) {
 
     return (
       <div className={styles.info}>
-        {`Last Book ${date}`}
+        {`Last Volume ${date}`}
       </div>
     );
   }
 
   if (sortKey === 'bookCount') {
-    let books = '1 book';
+    let books = '1 volume';
 
     if (bookCount === 0) {
-      books = 'No books';
+      books = 'No volumes';
     } else if (bookCount > 1) {
-      books = `${bookCount} books`;
+      books = `${bookCount} volumes`;
     }
 
     return (
