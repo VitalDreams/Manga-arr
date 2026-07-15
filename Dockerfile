@@ -28,8 +28,7 @@ RUN dotnet msbuild -restore src/NzbDrone.Host/Readarr.Host.csproj \
     -p:Platform=Posix \
     -p:RuntimeIdentifiers=linux-x64 \
     -p:TreatWarningsAsErrors=false \
-    -nowarn:NU1902,NU1903 \
-    -v minimal
+    -nowarn:NU1902,NU1903
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS runtime
