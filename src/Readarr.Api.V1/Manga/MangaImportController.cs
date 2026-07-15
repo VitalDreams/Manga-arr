@@ -3,29 +3,23 @@ using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Manga;
 using NzbDrone.Core.Manga.Import;
-using NzbDrone.SignalR;
 using Readarr.Http;
 using Readarr.Http.REST;
 
 namespace Readarr.Api.V1.Manga
 {
-    [V1ApiController]
-    public class MangaImportController : RestController
+    [V1ApiController("manga")]
+    public class MangaImportController : Controller
     {
         private readonly IMangaImportService _importService;
         private readonly IMangaFileScanner _fileScanner;
-        private readonly IMangaSeriesService _seriesService;
 
         public MangaImportController(
             IMangaImportService importService,
-            IMangaFileScanner fileScanner,
-            IMangaSeriesService seriesService,
-            IBroadcastSignalRMessage signalRBroadcaster)
-            : base(signalRBroadcaster)
+            IMangaFileScanner fileScanner)
         {
             _importService = importService;
             _fileScanner = fileScanner;
-            _seriesService = seriesService;
         }
 
         [HttpPost("import")]
@@ -49,7 +43,7 @@ namespace Readarr.Api.V1.Manga
                 return BadRequest("Failed to import series. Check logs for details.");
             }
 
-            return Created(series.Id);
+            return Created($"/api/v1/manga/{series.Id}", series.ToResource());
         }
 
         [HttpPost("importfile")]
@@ -102,7 +96,7 @@ namespace Readarr.Api.V1.Manga
             return mode.ToLowerInvariant() switch
             {
                 "move" => MangaImportMode.Move,
-                "inplace" or "in-place" or "inPlace" => MangaImportMode.InPlace,
+                "inplace" or "in-place" => MangaImportMode.InPlace,
                 _ => MangaImportMode.InPlace
             };
         }
