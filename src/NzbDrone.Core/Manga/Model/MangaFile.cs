@@ -12,5 +12,7 @@ namespace NzbDrone.Core.Manga
         public string RelativePath { get; set; }
         public long Size { get; set; }
         public DateTime AddedAt { get; set; } = DateTime.UtcNow;
+        public bool IsVolumePack { get; set; }
+        public string CoveredChapters { get; set; }
     }
 }

@@ -14,6 +14,7 @@ namespace NzbDrone.Core.Manga
     {
         Task<string> DownloadVolumeAsync(string outputDir, MangaSeries series, Volume volume);
         Task<string> DownloadChapterAsync(string outputDir, MangaSeries series, Volume volume, Chapter chapter);
+        Task<string> DownloadByModeAsync(string outputDir, MangaSeries series, Volume volume, DownloadMode mode);
     }
 
     public class MangaDexDownloader : IMangaDexDownloader
@@ -21,6 +22,8 @@ namespace NzbDrone.Core.Manga
         private readonly IMangaMetadataConnector _connector;
         private readonly ICbzCreator _cbzCreator;
         private readonly IMangaNamingService _namingService;
+        private readonly IVolumePackTracker _volumePackTracker;
+        private readonly IMangaFileService _mangaFileService;
         private static readonly HttpClient _httpClient = new HttpClient();
         private readonly IDiskProvider _diskProvider;
         private readonly Logger _logger;
@@ -29,14 +32,66 @@ namespace NzbDrone.Core.Manga
             IMangaMetadataConnector connector,
             ICbzCreator cbzCreator,
             IMangaNamingService namingService,
+            IVolumePackTracker volumePackTracker,
+            IMangaFileService mangaFileService,
             IDiskProvider diskProvider,
             Logger logger)
         {
             _connector = connector;
             _cbzCreator = cbzCreator;
             _namingService = namingService;
+            _volumePackTracker = volumePackTracker;
+            _mangaFileService = mangaFileService;
             _diskProvider = diskProvider;
             _logger = logger;
+        }
+
+        public async Task<string> DownloadByModeAsync(string outputDir, MangaSeries series, Volume volume, DownloadMode mode)
+        {
+            if (mode == DownloadMode.VolumePack)
+            {
+                return await DownloadVolumeAsync(outputDir, series, volume);
+            }
+            else
+            {
+                // Chapter mode - download each chapter individually
+                var chapters = await _connector.GetChaptersForVolumeAsync(series.ForeignMangaId, volume.VolumeNumber);
+
+                if (!chapters.Any())
+                {
+                    _logger.Warn($"No chapters found for volume {volume.VolumeNumber}");
+                    return null;
+                }
+
+                var downloadedPaths = new List<string>();
+
+                foreach (var chapterInfo in chapters)
+                {
+                    // Check if chapter is already covered by a volume pack
+                    if (_volumePackTracker.IsChapterCoveredByPack(series.Id, chapterInfo.ChapterNumber))
+                    {
+                        _logger.Info($"Chapter {chapterInfo.ChapterNumber} is already covered by a volume pack, skipping");
+                        continue;
+                    }
+
+                    var chapter = new Chapter
+                    {
+                        ForeignChapterId = chapterInfo.ForeignChapterId,
+                        ChapterNumber = chapterInfo.ChapterNumber,
+                        Language = chapterInfo.Language,
+                        ScanlationGroup = chapterInfo.ScanlationGroup,
+                        PageCount = chapterInfo.PageCount
+                    };
+
+                    var path = await DownloadChapterAsync(outputDir, series, volume, chapter);
+                    if (path != null)
+                    {
+                        downloadedPaths.Add(path);
+                    }
+                }
+
+                return downloadedPaths.Any() ? downloadedPaths.Last() : null;
+            }
         }
 
         public async Task<string> DownloadVolumeAsync(string outputDir, MangaSeries series, Volume volume)
@@ -84,6 +139,27 @@ namespace NzbDrone.Core.Manga
                 var cbzPath = await _cbzCreator.CreateCbzFromVolumeAsync(fullOutputDir, series, volume, chapterImages);
                 _logger.Info($"Created CBZ: {cbzPath}");
 
+                // Record volume pack coverage
+                var chapterNumbers = chapters.Select(c => c.ChapterNumber).ToList();
+                _volumePackTracker.RecordVolumePack(series.Id, volume.Id, chapterNumbers);
+
+                // Save MangaFile record with volume pack metadata
+                var fileInfo = new FileInfo(cbzPath);
+                var coveredChaptersStr = VolumePackChapterSerializer.SerializeChapters(chapterNumbers);
+                var mangaFile = new MangaFile
+                {
+                    VolumeId = volume.Id,
+                    MangaSeriesId = series.Id,
+                    Path = cbzPath,
+                    FileName = Path.GetFileName(cbzPath),
+                    RelativePath = Path.GetRelativePath(outputDir, cbzPath),
+                    Size = fileInfo.Exists ? fileInfo.Length : 0,
+                    IsVolumePack = true,
+                    CoveredChapters = coveredChaptersStr
+                };
+
+                _mangaFileService.Add(mangaFile);
+
                 return cbzPath;
             }
             finally
@@ -112,6 +188,22 @@ namespace NzbDrone.Core.Manga
 
                 var cbzPath = await _cbzCreator.CreateCbzFromChapterAsync(fullOutputDir, series, volume, chapter, imagePaths);
                 _logger.Info($"Created CBZ: {cbzPath}");
+
+                // Save MangaFile record for individual chapter
+                var fileInfo = new FileInfo(cbzPath);
+                var mangaFile = new MangaFile
+                {
+                    VolumeId = volume.Id,
+                    MangaSeriesId = series.Id,
+                    Path = cbzPath,
+                    FileName = Path.GetFileName(cbzPath),
+                    RelativePath = Path.GetRelativePath(outputDir, cbzPath),
+                    Size = fileInfo.Exists ? fileInfo.Length : 0,
+                    IsVolumePack = false,
+                    CoveredChapters = chapter.ChapterNumber.ToString("0.###")
+                };
+
+                _mangaFileService.Add(mangaFile);
 
                 return cbzPath;
             }

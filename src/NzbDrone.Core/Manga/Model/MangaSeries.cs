@@ -22,6 +22,7 @@ namespace NzbDrone.Core.Manga
         public string CleanName { get; set; }
         public bool Monitored { get; set; }
         public NewItemMonitorTypes MonitorNewItems { get; set; }
+        public DownloadMode DownloadMode { get; set; } = DownloadMode.VolumePack;
         public DateTime? LastInfoSync { get; set; }
         public string Path { get; set; }
         public string RootFolderPath { get; set; }
@@ -73,6 +74,7 @@ namespace NzbDrone.Core.Manga
             MangaMetadataId = other.MangaMetadataId;
             Monitored = other.Monitored;
             MonitorNewItems = other.MonitorNewItems;
+            DownloadMode = other.DownloadMode;
             LastInfoSync = other.LastInfoSync;
             Path = other.Path;
             RootFolderPath = other.RootFolderPath;
@@ -98,6 +100,7 @@ namespace NzbDrone.Core.Manga
             RootFolderPath = other.RootFolderPath;
             Monitored = other.Monitored;
             MonitorNewItems = other.MonitorNewItems;
+            DownloadMode = other.DownloadMode;
         }
     }
 }

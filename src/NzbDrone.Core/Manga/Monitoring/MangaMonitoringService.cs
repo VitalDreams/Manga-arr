@@ -17,6 +17,7 @@ namespace NzbDrone.Core.Manga.Monitoring
     {
         private readonly IMetadataAggregator _metadataAggregator;
         private readonly IMangaDexDownloader _downloader;
+        private readonly IVolumePackTracker _volumePackTracker;
         private readonly IKomgaIntegration _komga;
         private readonly INotificationService _notifications;
         private readonly Logger _logger;
@@ -31,12 +32,14 @@ namespace NzbDrone.Core.Manga.Monitoring
         public MangaMonitoringService(
             IMetadataAggregator metadataAggregator,
             IMangaDexDownloader downloader,
+            IVolumePackTracker volumePackTracker,
             IKomgaIntegration komga,
             INotificationService notifications,
             Logger logger)
         {
             _metadataAggregator = metadataAggregator;
             _downloader = downloader;
+            _volumePackTracker = volumePackTracker;
             _komga = komga;
             _notifications = notifications;
             _logger = logger;
