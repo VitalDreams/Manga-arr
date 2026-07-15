@@ -23,7 +23,7 @@ RUN yarn build
 
 # Build backend - nuclear option: strip Sentry before build
 WORKDIR /src/src
-RUN sed -i '/PackageReference.*Sentry/d' src/NzbDrone.Common/Readarr.Common.csproj
+RUN sed -i '/PackageReference.*Sentry/d' NzbDrone.Common/Readarr.Common.csproj
 RUN dotnet nuget locals all --clear
 RUN dotnet msbuild -restore Readarr.sln \
     -p:Configuration=Release \
