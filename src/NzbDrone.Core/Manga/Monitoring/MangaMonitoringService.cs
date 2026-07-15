@@ -150,7 +150,8 @@ namespace NzbDrone.Core.Manga.Monitoring
             {
                 ForeignMangaId = manga.MangaDexId,
                 Name = manga.Title,
-                Path = manga.OutputPath
+                Path = manga.OutputPath,
+                DownloadMode = manga.DownloadMode
             };
 
             var volume = new Volume
@@ -161,11 +162,12 @@ namespace NzbDrone.Core.Manga.Monitoring
 
             try
             {
-                var result = await _downloader.DownloadVolumeAsync(manga.OutputPath, series, volume);
+                // Use the configured download mode
+                var result = await _downloader.DownloadByModeAsync(manga.OutputPath, series, volume, manga.DownloadMode);
 
                 if (result != null)
                 {
-                    _logger.Info($"Successfully downloaded {manga.Title} volume {volumeNumber} to {result}");
+                    _logger.Info($"Successfully downloaded {manga.Title} volume {volumeNumber} to {result} (mode: {manga.DownloadMode})");
 
                     // Update tracking
                     manga.LastDownloadedVolume = volumeNumber;
@@ -178,7 +180,8 @@ namespace NzbDrone.Core.Manga.Monitoring
                         VolumeNumber = volumeNumber,
                         DownloadedAt = DateTime.UtcNow,
                         FilePath = result,
-                        Status = "completed"
+                        Status = "completed",
+                        DownloadMode = manga.DownloadMode.ToString()
                     });
 
                     // Trigger Komga scan
@@ -188,13 +191,14 @@ namespace NzbDrone.Core.Manga.Monitoring
                     await _notifications.SendAsync(new Notification
                     {
                         Title = "New Manga Volume Downloaded",
-                        Message = $"{manga.Title} Volume {volumeNumber} has been downloaded",
+                        Message = $"{manga.Title} Volume {volumeNumber} has been downloaded ({manga.DownloadMode} mode)",
                         Type = NotificationType.Download,
                         Data = new
                         {
                             MangaTitle = manga.Title,
                             VolumeNumber = volumeNumber,
-                            FilePath = result
+                            FilePath = result,
+                            DownloadMode = manga.DownloadMode.ToString()
                         }
                     });
                 }
@@ -208,7 +212,8 @@ namespace NzbDrone.Core.Manga.Monitoring
                         Title = manga.Title,
                         VolumeNumber = volumeNumber,
                         DownloadedAt = DateTime.UtcNow,
-                        Status = "failed"
+                        Status = "failed",
+                        DownloadMode = manga.DownloadMode.ToString()
                     });
                 }
             }
@@ -263,6 +268,7 @@ namespace NzbDrone.Core.Manga.Monitoring
         public string OutputPath { get; set; }
         public bool Monitored { get; set; } = true;
         public bool AutoDownload { get; set; } = true;
+        public DownloadMode DownloadMode { get; set; } = DownloadMode.VolumePack;
         public int LastDownloadedVolume { get; set; }
         public DateTime? LastDownloadedAt { get; set; }
         public DateTime? LastChecked { get; set; }
@@ -277,5 +283,6 @@ namespace NzbDrone.Core.Manga.Monitoring
         public DateTime DownloadedAt { get; set; }
         public string FilePath { get; set; }
         public string Status { get; set; }
+        public string DownloadMode { get; set; }
     }
 }

@@ -1,10 +1,10 @@
 using System;
+using NzbDrone.Core.Datastore;
 
 namespace NzbDrone.Core.Manga
 {
-    public class MangaFile
+    public class MangaFile : ModelBase
     {
-        public int Id { get; set; }
         public int VolumeId { get; set; }
         public int MangaSeriesId { get; set; }
         public string Path { get; set; }

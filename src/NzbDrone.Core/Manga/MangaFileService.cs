@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using NzbDrone.Core.Datastore;
+using NzbDrone.Core.Messaging.Events;
 
 namespace NzbDrone.Core.Manga
 {
@@ -82,8 +83,8 @@ namespace NzbDrone.Core.Manga
 
     public class MangaFileRepository : BasicRepository<MangaFile>, IMangaFileRepository
     {
-        public MangaFileRepository(IMainDatabase database)
-            : base(database)
+        public MangaFileRepository(IMainDatabase database, IEventAggregator eventAggregator)
+            : base(database, eventAggregator)
         {
         }
 
