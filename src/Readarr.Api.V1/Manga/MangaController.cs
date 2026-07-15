@@ -69,7 +69,7 @@ namespace Readarr.Api.V1.Manga
                 resource.CoverUrl = covers[0].Url;
             }
 
-            return Created(series.Id, resource);
+            return Created(series.Id);
         }
 
         [RestPutById]
