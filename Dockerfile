@@ -23,6 +23,7 @@ RUN yarn build
 
 # Build backend using Readarr's msbuild approach
 WORKDIR /src/src
+RUN sed -i '/PackageReference.*Sentry/d' /src/src/NzbDrone.Common/Readarr.Common.csproj
 RUN dotnet msbuild -restore Readarr.sln \
     -p:Configuration=Release \
     -p:Platform=Posix \
