@@ -9,6 +9,7 @@ services:
       - /opt/containers/media-stack/config/mangaarr:/config
       - /opt/containers/media-stack/config/mangaarr/readarr-config:/root/.config/Readarr
       - /mnt/media/Manga:/manga
+      - /mnt/media/transmission/downloads:/downloads
     environment:
       - PUID=0
       - PGID=0
