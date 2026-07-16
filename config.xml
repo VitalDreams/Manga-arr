@@ -3,7 +3,7 @@
   <AuthenticationRequired>DisabledForLocalAddresses</AuthenticationRequired>
   <AnalyticsEnabled>False</AnalyticsEnabled>
   <BindAddress>*</BindAddress>
-  <Port>8192</Port>
+  <Port>8787</Port>
   <SslPort>8193</SslPort>
   <EnableSsl>False</EnableSsl>
   <LaunchBrowser>False</LaunchBrowser>
