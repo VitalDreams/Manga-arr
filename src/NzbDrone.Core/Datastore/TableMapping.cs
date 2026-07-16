@@ -193,6 +193,8 @@ namespace NzbDrone.Core.Datastore
             Mapper.Entity<MangaMetadata>("MangaMetadata").RegisterModel();
 
             Mapper.Entity<MangaSeries>("MangaSeries").RegisterModel()
+                .Ignore(s => s.Name)
+                .Ignore(s => s.ForeignMangaId)
                 .HasOne(s => s.Metadata, s => s.MangaMetadataId);
 
             Mapper.Entity<StoryArc>("StoryArcs").RegisterModel()
