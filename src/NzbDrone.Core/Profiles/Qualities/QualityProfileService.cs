@@ -98,7 +98,7 @@ namespace NzbDrone.Core.Profiles.Qualities
 
             _logger.Info("Setting up default quality profiles");
 
-            AddDefaultProfile("eBook",
+            AddDefaultProfile("Standard",
                 Quality.MOBI,
                 Quality.MOBI,
                 Quality.EPUB,
