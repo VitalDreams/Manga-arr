@@ -1,6 +1,6 @@
 <Config>
   <AuthenticationMethod>None</AuthenticationMethod>
-  <AuthenticationRequired>Enabled</AuthenticationRequired>
+  <AuthenticationRequired>DisabledForLocalAddresses</AuthenticationRequired>
   <AnalyticsEnabled>False</AnalyticsEnabled>
   <BindAddress>*</BindAddress>
   <Port>8192</Port>
