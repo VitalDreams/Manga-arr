@@ -12,6 +12,7 @@ namespace NzbDrone.Core.Manga
     public interface IMangaSearchService
     {
         Task<MangaSearchAndDownloadResult> SearchAndDownloadAsync(int seriesId, int? volumeNumber = null);
+        Task<MangaSearchAndDownloadResult> SearchAndDownloadAsync(MangaSeries series, Volume volume);
     }
 
     public class MangaSearchService : IMangaSearchService
@@ -211,6 +212,91 @@ namespace NzbDrone.Core.Manga
             catch (Exception ex)
             {
                 _logger.Error(ex, "Error during search and download for {0}", series.Name);
+                result.Success = false;
+                result.ErrorMessage = ex.Message;
+            }
+
+            return result;
+        }
+
+        public async Task<MangaSearchAndDownloadResult> SearchAndDownloadAsync(MangaSeries series, Volume volume)
+        {
+            var result = new MangaSearchAndDownloadResult
+            {
+                SeriesTitle = series.Name,
+                ForeignMangaId = series.ForeignMangaId
+            };
+
+            _logger.Info("Starting search and download for {0} volume {1}", series.Name, volume.VolumeNumber);
+
+            try
+            {
+                // Try MangaDex first
+                var volumeChapterMap = await _mangaDexConnector.GetVolumeChapterMapAsync(series.ForeignMangaId);
+
+                if (volumeChapterMap?.VolumeChapters != null &&
+                    volumeChapterMap.VolumeChapters.ContainsKey(volume.VolumeNumber))
+                {
+                    _logger.Info("Downloading volume {0} from MangaDex...", volume.VolumeNumber);
+                    var downloadPath = await _mangaDexDownloader.DownloadVolumeAsync(
+                        series.RootFolderPath ?? series.Path, series, volume);
+
+                    if (downloadPath != null)
+                    {
+                        result.DownloadedVolumes.Add(new DownloadedVolumeResult
+                        {
+                            VolumeNumber = volume.VolumeNumber,
+                            FilePath = downloadPath,
+                            Source = "MangaDex"
+                        });
+                        result.Success = true;
+                        result.TotalVolumesSearched = 1;
+                        return result;
+                    }
+                }
+
+                // Fallback to Prowlarr
+                _logger.Info("MangaDex unavailable for volume {0}, trying Prowlarr...", volume.VolumeNumber);
+                var prowlarrResult = await TryProwlarrFallbackAsync(series, volume, volume.VolumeNumber);
+
+                if (prowlarrResult != null)
+                {
+                    result.DownloadedVolumes.Add(prowlarrResult);
+                    result.Success = true;
+                }
+                else
+                {
+                    result.FailedVolumes.Add(new FailedVolumeResult
+                    {
+                        VolumeNumber = volume.VolumeNumber,
+                        ErrorMessage = "Both MangaDex and Prowlarr failed",
+                        Source = "Both"
+                    });
+                }
+
+                result.TotalVolumesSearched = 1;
+
+                // Komga scan + notification
+                if (result.DownloadedVolumes.Any())
+                {
+                    try { await _komga.TriggerLibraryScanAsync(); }
+                    catch (Exception ex) { _logger.Warn(ex, "Failed to trigger Komga library scan"); }
+
+                    try
+                    {
+                        await _notifications.SendAsync(new Notification
+                        {
+                            Title = "New Manga Volume Downloaded",
+                            Message = $"{series.Name} Volume {volume.VolumeNumber} downloaded from {result.DownloadedVolumes.First().Source}",
+                            Type = NotificationType.Download
+                        });
+                    }
+                    catch (Exception ex) { _logger.Warn(ex, "Failed to send notification"); }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error during search and download for {0} volume {1}", series.Name, volume.VolumeNumber);
                 result.Success = false;
                 result.ErrorMessage = ex.Message;
             }
