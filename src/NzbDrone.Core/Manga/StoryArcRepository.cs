@@ -21,12 +21,12 @@ namespace NzbDrone.Core.Manga
 
         public List<StoryArc> GetArcsByMangaMetadata(int mangaMetadataId)
         {
-            return Query.Where(a => a.MangaMetadataId == mangaMetadataId).OrderBy(a => a.ArcOrder).ToList();
+            return Query(a => a.MangaMetadataId == mangaMetadataId).OrderBy(a => a.ArcOrder).ToList();
         }
 
         public StoryArc GetArcByForeignId(int mangaMetadataId, string foreignArcId)
         {
-            return Query.Where(a => a.MangaMetadataId == mangaMetadataId && a.ForeignArcId == foreignArcId).SingleOrDefault();
+            return Query(a => a.MangaMetadataId == mangaMetadataId && a.ForeignArcId == foreignArcId).SingleOrDefault();
         }
     }
 }

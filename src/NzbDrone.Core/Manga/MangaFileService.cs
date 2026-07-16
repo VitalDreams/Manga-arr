@@ -90,12 +90,12 @@ namespace NzbDrone.Core.Manga
 
         public List<MangaFile> GetFilesBySeries(int seriesId)
         {
-            return Query.Where(f => f.MangaSeriesId == seriesId).ToList();
+            return Query(f => f.MangaSeriesId == seriesId).ToList();
         }
 
         public List<MangaFile> GetFilesByVolume(int volumeId)
         {
-            return Query.Where(f => f.VolumeId == volumeId).ToList();
+            return Query(f => f.VolumeId == volumeId).ToList();
         }
     }
 }

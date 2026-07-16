@@ -120,7 +120,7 @@ namespace NzbDrone.Core.Manga.Download
                             TotalSize = item.TotalSize,
                             RemainingSize = item.RemainingSize,
                             RemainingTime = item.RemainingTime,
-                            OutputPath = item.OutputPath?.ToString(),
+                            OutputPath = item.OutputPath.ToString(),
                             Message = item.Message,
                             ClientName = client.Name
                         });
@@ -158,7 +158,7 @@ namespace NzbDrone.Core.Manga.Download
                             TotalSize = item.TotalSize,
                             RemainingSize = item.RemainingSize,
                             RemainingTime = item.RemainingTime,
-                            OutputPath = item.OutputPath?.ToString(),
+                            OutputPath = item.OutputPath.ToString(),
                             Message = item.Message,
                             ClientName = client.Name
                         });
