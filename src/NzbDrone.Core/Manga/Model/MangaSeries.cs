@@ -47,20 +47,20 @@ namespace NzbDrone.Core.Manga
         [MemberwiseEqualityIgnore]
         public string Name
         {
-            get { return Metadata.Value.Title; }
-            set { Metadata.Value.Title = value; }
+            get { return Metadata?.Value?.Title; }
+            set { if (Metadata?.Value != null) Metadata.Value.Title = value; }
         }
 
         [MemberwiseEqualityIgnore]
         public string ForeignMangaId
         {
-            get { return Metadata.Value.ForeignMangaId; }
-            set { Metadata.Value.ForeignMangaId = value; }
+            get { return Metadata?.Value?.ForeignMangaId; }
+            set { if (Metadata?.Value != null) Metadata.Value.ForeignMangaId = value; }
         }
 
         public override string ToString()
         {
-            return string.Format("[{0}][{1}]", Metadata.Value.ForeignMangaId.NullSafe(), Metadata.Value.Title.NullSafe());
+            return string.Format("[{0}][{1}]", Metadata?.Value?.ForeignMangaId.NullSafe(), Metadata?.Value?.Title.NullSafe());
         }
 
         public override void UseMetadataFrom(MangaSeries other)
