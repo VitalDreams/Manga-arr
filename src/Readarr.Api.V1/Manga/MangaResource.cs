@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
+using NzbDrone.Core.Books;
 using NzbDrone.Core.Manga;
 using Readarr.Http.REST;
 

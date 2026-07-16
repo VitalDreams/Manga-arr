@@ -12,13 +12,6 @@ namespace NzbDrone.Core.Manga
         public const string None = "none";
     }
 
-    public class NewItemMonitorTypes
-    {
-        public const string All = "all";
-        public const string None = "none";
-        public const string Specific = "specific";
-    }
-
     public class AddMangaSeriesOptions
     {
         public bool SearchForMissingVolumes { get; set; }

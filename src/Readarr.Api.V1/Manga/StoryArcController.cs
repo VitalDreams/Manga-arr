@@ -34,7 +34,7 @@ namespace Readarr.Api.V1.Manga
             return _arcService.GetArc(id).ToResource();
         }
 
-        [HttpGet("api/v1/manga/{mangaId}/arcs")]
+        [HttpGet("/api/v1/manga/{mangaId}/arcs")]
         [Produces("application/json")]
         public List<StoryArcResource> GetArcsForManga(int mangaId)
         {
@@ -42,14 +42,14 @@ namespace Readarr.Api.V1.Manga
             return _arcService.GetArcs(series.MangaMetadataId).ToResource();
         }
 
-        [HttpGet("api/v1/manga/{mangaId}/arcs/{arcId}")]
+        [HttpGet("/api/v1/manga/{mangaId}/arcs/{arcId}")]
         [Produces("application/json")]
         public StoryArcResource GetArc(int mangaId, int arcId)
         {
             return _arcService.GetArc(arcId).ToResource();
         }
 
-        [HttpPost("api/v1/manga/{mangaId}/arcs")]
+        [HttpPost("/api/v1/manga/{mangaId}/arcs")]
         public ActionResult<StoryArcResource> AddArc(int mangaId, [FromBody] StoryArcResource arcResource)
         {
             var series = _mangaService.GetSeries(mangaId);
@@ -60,7 +60,7 @@ namespace Readarr.Api.V1.Manga
             return Created(arc.Id);
         }
 
-        [HttpPut("api/v1/manga/{mangaId}/arcs/{arcId}")]
+        [HttpPut("/api/v1/manga/{mangaId}/arcs/{arcId}")]
         public ActionResult<StoryArcResource> UpdateArc(int mangaId, int arcId, [FromBody] StoryArcResource arcResource)
         {
             var existing = _arcService.GetArc(arcId);
@@ -73,7 +73,7 @@ namespace Readarr.Api.V1.Manga
             return Accepted(arcResource.Id);
         }
 
-        [HttpDelete("api/v1/manga/{mangaId}/arcs/{arcId}")]
+        [HttpDelete("/api/v1/manga/{mangaId}/arcs/{arcId}")]
         public void DeleteArc(int mangaId, int arcId)
         {
             _arcService.DeleteArc(arcId);

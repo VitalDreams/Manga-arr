@@ -99,7 +99,7 @@ namespace NzbDrone.Core.Manga.Download
             }
         }
 
-        public async Task<MangaDownloadStatus> GetDownloadStatus(string downloadId)
+        public Task<MangaDownloadStatus> GetDownloadStatus(string downloadId)
         {
             try
             {
@@ -112,7 +112,7 @@ namespace NzbDrone.Core.Manga.Download
 
                     if (item != null)
                     {
-                        return new MangaDownloadStatus
+                        return Task.FromResult(new MangaDownloadStatus
                         {
                             DownloadId = item.DownloadId,
                             Title = item.Title,
@@ -123,20 +123,20 @@ namespace NzbDrone.Core.Manga.Download
                             OutputPath = item.OutputPath?.ToString(),
                             Message = item.Message,
                             ClientName = client.Name
-                        };
+                        });
                     }
                 }
 
-                return null;
+                return Task.FromResult<MangaDownloadStatus>(null);
             }
             catch (Exception ex)
             {
                 _logger.Error(ex, "Failed to get download status for {0}", downloadId);
-                return null;
+                return Task.FromResult<MangaDownloadStatus>(null);
             }
         }
 
-        public async Task<List<MangaDownloadStatus>> GetActiveDownloads()
+        public Task<List<MangaDownloadStatus>> GetActiveDownloads()
         {
             var allItems = new List<MangaDownloadStatus>();
 
@@ -170,7 +170,7 @@ namespace NzbDrone.Core.Manga.Download
                 _logger.Error(ex, "Failed to get active downloads");
             }
 
-            return allItems;
+            return Task.FromResult(allItems);
         }
 
         private RemoteBook BuildRemoteBook(
