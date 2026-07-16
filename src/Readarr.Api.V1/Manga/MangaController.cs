@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using FluentValidation;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Common.Http;
 using NzbDrone.Core.Datastore.Events;
@@ -94,6 +95,7 @@ namespace Readarr.Api.V1.Manga
             _mangaService.DeleteSeries(id, deleteFiles);
         }
 
+        [AllowAnonymous]
         [HttpGet("cover")]
         public IActionResult GetCover([FromQuery] string url)
         {
