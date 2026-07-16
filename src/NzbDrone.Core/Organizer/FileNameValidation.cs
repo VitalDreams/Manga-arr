@@ -31,9 +31,9 @@ namespace NzbDrone.Core.Organizer
 
     public class ValidStandardTrackFormatValidator : PropertyValidator
     {
-        private static readonly Regex Mylar3TitleTokenRegex = new Regex(@"\$Title|\{Title\}",
+        private static readonly Regex Mylar3TitleTokenRegex = new Regex(@"\$Series|\{Title\}",
                                                                             RegexOptions.Compiled | RegexOptions.IgnoreCase);
-        private static readonly Regex Mylar3PartTokenRegex = new Regex(@"\$PartNumber|\$Part|\{PartNumber\}|\{Part\}",
+        private static readonly Regex Mylar3PartTokenRegex = new Regex(@"\$IssueN|\{PartNumber\}|\{Part\}",
                                                                           RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         protected override string GetDefaultMessageTemplate() => "Must contain Book Title AND PartNumber, OR Original Title";
@@ -53,7 +53,7 @@ namespace NzbDrone.Core.Organizer
 
     public class AuthorFolderFormatValidator : PropertyValidator
     {
-        private static readonly Regex Mylar3AuthorTokenRegex = new Regex(@"\$Author|\{Author\}",
+        private static readonly Regex Mylar3AuthorTokenRegex = new Regex(@"\$Series|\{Author\}",
                                                                             RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         protected override string GetDefaultMessageTemplate() => "Must contain Author name";

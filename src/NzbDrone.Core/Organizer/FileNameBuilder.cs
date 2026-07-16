@@ -56,9 +56,8 @@ namespace NzbDrone.Core.Organizer
 
         private static readonly Regex TitlePrefixRegex = new Regex(@"^(The|An|A) (.*?)((?: *\([^)]+\))*)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
-        // Mylar3-style $ tokens: $Title, $Author, $PartNumber, $Part, $Publisher, $ReleaseYear, $Release Year
-        // Ordered longest-first so $PartNumber matches before $Part
-        private static readonly Regex Mylar3TokenRegex = new Regex(@"\$PartNumber|\$ReleaseYear|\$Release\sYear|\$Publisher|\$Author|\$Title|\$Part",
+        // Mylar3-style $ tokens: $Series, $IssueN, $Year, $Publisher
+        private static readonly Regex Mylar3TokenRegex = new Regex(@"\$Series|\$IssueN|\$Year|\$Publisher",
                                                                      RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         public FileNameBuilder(INamingConfigService namingConfigService,
@@ -398,18 +397,14 @@ namespace NzbDrone.Core.Organizer
                 var token = match.Value.ToLowerInvariant().Replace(" ", "");
                 switch (token)
                 {
-                    case "$title":
-                        return "{Title}";
-                    case "$author":
-                        return "{Author}";
-                    case "$partnumber":
+                    case "$series":
+                        return "{Author Name}";
+                    case "$issuen":
                         return "{PartNumber}";
-                    case "$part":
-                        return "{Part}";
+                    case "$year":
+                        return "{Release Year}";
                     case "$publisher":
                         return "{Publisher}";
-                    case "$releaseyear":
-                        return "{Release Year}";
                     default:
                         return match.Value;
                 }
