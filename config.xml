@@ -1,0 +1,10 @@
+<Config>
+  <AuthenticationMethod>None</AuthenticationMethod>
+  <AuthenticationRequired>Enabled</AuthenticationRequired>
+  <AnalyticsEnabled>False</AnalyticsEnabled>
+  <BindAddress>*</BindAddress>
+  <Port>8192</Port>
+  <SslPort>8193</SslPort>
+  <EnableSsl>False</EnableSsl>
+  <LaunchBrowser>False</LaunchBrowser>
+</Config>
