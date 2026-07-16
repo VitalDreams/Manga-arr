@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Common.Http;
@@ -19,17 +20,20 @@ namespace Readarr.Api.V1.Manga
     public class MangaController : RestControllerWithSignalR<MangaResource, MangaSeries>
     {
         private readonly IMangaSeriesService _mangaService;
+        private readonly IMangaSearchService _searchService;
         private readonly IMapCoversToLocal _coverMapper;
         private readonly IHttpClient _httpClient;
 
         public MangaController(
             IMangaSeriesService mangaService,
+            IMangaSearchService searchService,
             IMapCoversToLocal coverMapper,
             IHttpClient httpClient,
             IBroadcastSignalRMessage signalRBroadcaster)
             : base(signalRBroadcaster)
         {
             _mangaService = mangaService;
+            _searchService = searchService;
             _coverMapper = coverMapper;
             _httpClient = httpClient;
 
@@ -108,6 +112,32 @@ namespace Readarr.Api.V1.Manga
             {
                 return StatusCode(502, "Failed to fetch cover image");
             }
+        }
+
+        [HttpPost("{id}/search")]
+        public async Task<ActionResult<MangaSearchAndDownloadResult>> SearchAllVolumes(int id)
+        {
+            var series = _mangaService.GetSeries(id);
+            if (series == null)
+            {
+                return NotFound();
+            }
+
+            var result = await _searchService.SearchAndDownloadAsync(id);
+            return Ok(result);
+        }
+
+        [HttpPost("{id}/search/{volumeId}")]
+        public async Task<ActionResult<MangaSearchAndDownloadResult>> SearchVolume(int id, int volumeId)
+        {
+            var series = _mangaService.GetSeries(id);
+            if (series == null)
+            {
+                return NotFound();
+            }
+
+            var result = await _searchService.SearchAndDownloadAsync(id, volumeId);
+            return Ok(result);
         }
     }
 }

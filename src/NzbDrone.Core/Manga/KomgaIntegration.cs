@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -13,6 +14,8 @@ namespace NzbDrone.Core.Manga
         Task TriggerLibraryScanAsync();
         Task TriggerSeriesScanAsync(string seriesId);
         Task<bool> IsAvailableAsync();
+        Task<bool> WaitForScanCompletionAsync(TimeSpan? timeout = null);
+        Task<bool> VerifyMangaExistsAsync(string seriesTitle, int volumeNumber);
     }
 
     public class KomgaIntegration : IKomgaIntegration
@@ -97,6 +100,88 @@ namespace NzbDrone.Core.Manga
             }
             catch
             {
+                return false;
+            }
+        }
+
+        public async Task<bool> WaitForScanCompletionAsync(TimeSpan? timeout = null)
+        {
+            if (string.IsNullOrEmpty(BaseUrl))
+            {
+                return false;
+            }
+
+            var effectiveTimeout = timeout ?? TimeSpan.FromMinutes(5);
+            var deadline = DateTime.UtcNow + effectiveTimeout;
+            var pollInterval = TimeSpan.FromSeconds(3);
+
+            _logger.Info("Waiting for Komga library scan to complete...");
+
+            while (DateTime.UtcNow < deadline)
+            {
+                try
+                {
+                    var url = $"{BaseUrl}/api/v1/libraries";
+                    var request = new HttpRequestBuilder(url)
+                        .SetHeader("X-API-Key", ApiKey)
+                        .Build();
+
+                    var response = await _httpClient.GetAsync(request);
+
+                    if (response.StatusCode == System.Net.HttpStatusCode.OK)
+                    {
+                        var json = response.Content;
+                        if (json != null && !json.Contains("\"scanInProgress\":true"))
+                        {
+                            _logger.Info("Komga library scan completed");
+                            return true;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "Error checking Komga scan status");
+                }
+
+                await Task.Delay(pollInterval);
+            }
+
+            _logger.Warn("Timed out waiting for Komga library scan");
+            return false;
+        }
+
+        public async Task<bool> VerifyMangaExistsAsync(string seriesTitle, int volumeNumber)
+        {
+            if (string.IsNullOrEmpty(BaseUrl))
+            {
+                return false;
+            }
+
+            try
+            {
+                var url = $"{BaseUrl}/api/v1/series?search={Uri.EscapeDataString(seriesTitle)}";
+                var request = new HttpRequestBuilder(url)
+                    .SetHeader("X-API-Key", ApiKey)
+                    .Build();
+
+                var response = await _httpClient.GetAsync(request);
+
+                if (response.StatusCode == System.Net.HttpStatusCode.OK)
+                {
+                    var json = response.Content;
+                    if (json != null && json.Contains(seriesTitle, StringComparison.OrdinalIgnoreCase))
+                    {
+                        _logger.Debug("Verified manga '{0}' exists in Komga", seriesTitle);
+                        return true;
+                    }
+                }
+
+                _logger.Debug("Manga '{0}' not found in Komga", seriesTitle);
+                return false;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to verify manga existence in Komga");
                 return false;
             }
         }

@@ -14,6 +14,18 @@ namespace NzbDrone.Core.Manga
             // Register MangaDex as the default manga metadata connector
             container.Register<IMangaMetadataConnector, MangaDexConnector>(Reuse.Singleton);
 
+            // Register metadata aggregator (MangaDex + AniList enrichment)
+            container.Register<MangaDexConnector, MangaDexConnector>(Reuse.Singleton);
+            container.Register<AniListConnector, AniListConnector>(Reuse.Singleton);
+            container.Register<IMetadataAggregator, MetadataAggregator>(Reuse.Singleton);
+
+            // Register Prowlarr connector (fallback download source)
+            container.Register<IProwlarrConnector, ProwlarrConnector>(Reuse.Singleton);
+
+            // Register manga series repository and service
+            container.Register<IMangaSeriesRepository, MangaSeriesRepository>(Reuse.Singleton);
+            container.Register<IMangaSeriesService, MangaSeriesService>(Reuse.Singleton);
+
             // Register volume pack tracker
             container.Register<IVolumePackTracker, VolumePackTracker>(Reuse.Singleton);
 
@@ -23,6 +35,15 @@ namespace NzbDrone.Core.Manga
 
             // Register volume repository
             container.Register<IVolumeRepository, VolumeRepository>(Reuse.Singleton);
+
+            // Register naming and CBZ creation services
+            container.Register<IMangaNamingService, MangaNamingService>(Reuse.Singleton);
+            container.Register<IComicInfoGenerator, ComicInfoGenerator>(Reuse.Singleton);
+            container.Register<ICbzCreator, CbzCreator>(Reuse.Singleton);
+            container.Register<ISeriesMetadataGenerator, SeriesMetadataGenerator>(Reuse.Singleton);
+
+            // Register MangaDex downloader (direct download)
+            container.Register<IMangaDexDownloader, MangaDexDownloader>(Reuse.Singleton);
 
             // Register manga import services
             container.Register<IMangaFileScanner, MangaFileScanner>(Reuse.Singleton);
@@ -35,6 +56,18 @@ namespace NzbDrone.Core.Manga
             // Register manga download services (Phase 7)
             container.Register<IMangaDownloadService, MangaDownloadService>(Reuse.Singleton);
             container.Register<IHostedService, MangaDownloadCompletionHandler>(Reuse.Singleton, serviceKey: "MangaDownloadCompletionHandler");
+
+            // Register Komga integration
+            container.Register<IKomgaIntegration, KomgaIntegration>(Reuse.Singleton);
+
+            // Register notification service
+            container.Register<INotificationService, NotificationService>(Reuse.Singleton);
+
+            // Register manga search service (Phase 9 - orchestrates full search->download pipeline)
+            container.Register<IMangaSearchService, MangaSearchService>(Reuse.Singleton);
+
+            // Register monitoring service (Phase 9 - background monitoring with dual-source download)
+            container.Register<IHostedService, MangaMonitoringService>(Reuse.Singleton, serviceKey: "MangaMonitoringService");
 
             return container;
         }

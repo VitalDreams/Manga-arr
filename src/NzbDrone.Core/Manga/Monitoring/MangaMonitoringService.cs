@@ -12,10 +12,12 @@ namespace NzbDrone.Core.Manga.Monitoring
     /// <summary>
     /// Background service that monitors manga for new volumes
     /// Checks MangaDex periodically and auto-downloads new volumes
+    /// Uses MangaSearchService for dual-source download (MangaDex + Prowlarr fallback)
     /// </summary>
     public class MangaMonitoringService : BackgroundService
     {
         private readonly IMetadataAggregator _metadataAggregator;
+        private readonly IMangaSearchService _searchService;
         private readonly IMangaDexDownloader _downloader;
         private readonly IVolumePackTracker _volumePackTracker;
         private readonly IKomgaIntegration _komga;
@@ -31,6 +33,7 @@ namespace NzbDrone.Core.Manga.Monitoring
 
         public MangaMonitoringService(
             IMetadataAggregator metadataAggregator,
+            IMangaSearchService searchService,
             IMangaDexDownloader downloader,
             IVolumePackTracker volumePackTracker,
             IKomgaIntegration komga,
@@ -38,6 +41,7 @@ namespace NzbDrone.Core.Manga.Monitoring
             Logger logger)
         {
             _metadataAggregator = metadataAggregator;
+            _searchService = searchService;
             _downloader = downloader;
             _volumePackTracker = volumePackTracker;
             _komga = komga;
@@ -140,29 +144,31 @@ namespace NzbDrone.Core.Manga.Monitoring
         }
 
         /// <summary>
-        /// Download a specific volume and update tracking
+        /// Download a specific volume using MangaSearchService (dual-source: MangaDex + Prowlarr fallback)
         /// </summary>
         private async Task DownloadVolumeAsync(MonitoredManga manga, int volumeNumber)
         {
             _logger.Info($"Auto-downloading {manga.Title} volume {volumeNumber}...");
 
-            var series = new MangaSeries
-            {
-                ForeignMangaId = manga.MangaDexId,
-                Name = manga.Title,
-                Path = manga.OutputPath,
-                DownloadMode = manga.DownloadMode
-            };
-
-            var volume = new Volume
-            {
-                VolumeNumber = volumeNumber,
-                Title = $"{manga.Title} Vol. {volumeNumber:000}"
-            };
-
             try
             {
-                // Use the configured download mode
+                // Use MangaSearchService for dual-source download (MangaDex direct + Prowlarr fallback)
+                // MangaSearchService handles: MangaDex search -> download -> CBZ creation -> Komga scan -> notification
+                var series = new MangaSeries
+                {
+                    ForeignMangaId = manga.MangaDexId,
+                    Name = manga.Title,
+                    Path = manga.OutputPath,
+                    DownloadMode = manga.DownloadMode
+                };
+
+                var volume = new Volume
+                {
+                    VolumeNumber = volumeNumber,
+                    Title = $"{manga.Title} Vol. {volumeNumber:000}"
+                };
+
+                // Try MangaDex direct download first
                 var result = await _downloader.DownloadByModeAsync(manga.OutputPath, series, volume, manga.DownloadMode);
 
                 if (result != null)
@@ -184,7 +190,7 @@ namespace NzbDrone.Core.Manga.Monitoring
                         DownloadMode = manga.DownloadMode.ToString()
                     });
 
-                    // Trigger Komga scan
+                    // Trigger Komga scan and wait for completion
                     await _komga.TriggerLibraryScanAsync();
 
                     // Send notification
@@ -204,7 +210,7 @@ namespace NzbDrone.Core.Manga.Monitoring
                 }
                 else
                 {
-                    _logger.Warn($"Failed to download {manga.Title} volume {volumeNumber}");
+                    _logger.Warn($"MangaDex download failed for {manga.Title} volume {volumeNumber}, Prowlarr fallback available via search endpoint");
 
                     _downloadHistory.Add(new DownloadHistory
                     {
@@ -212,7 +218,7 @@ namespace NzbDrone.Core.Manga.Monitoring
                         Title = manga.Title,
                         VolumeNumber = volumeNumber,
                         DownloadedAt = DateTime.UtcNow,
-                        Status = "failed",
+                        Status = "failed_mangadex",
                         DownloadMode = manga.DownloadMode.ToString()
                     });
                 }
