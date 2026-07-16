@@ -56,8 +56,8 @@ namespace NzbDrone.Core.Organizer
 
         private static readonly Regex TitlePrefixRegex = new Regex(@"^(The|An|A) (.*?)((?: *\([^)]+\))*)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
-        // Mylar3-style $ tokens: $Series, $IssueN, $Year, $Publisher
-        private static readonly Regex Mylar3TokenRegex = new Regex(@"\$Series|\$IssueN|\$Year|\$Publisher",
+        // Mylar3-style $ tokens: $Series, $Issue, $Year, $Publisher
+        private static readonly Regex Mylar3TokenRegex = new Regex(@"\$Series|\$Issue|\$Year|\$Publisher",
                                                                      RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         public FileNameBuilder(INamingConfigService namingConfigService,

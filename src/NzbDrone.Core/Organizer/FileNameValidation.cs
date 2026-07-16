@@ -33,7 +33,7 @@ namespace NzbDrone.Core.Organizer
     {
         private static readonly Regex Mylar3TitleTokenRegex = new Regex(@"\$Series|\{Title\}",
                                                                             RegexOptions.Compiled | RegexOptions.IgnoreCase);
-        private static readonly Regex Mylar3PartTokenRegex = new Regex(@"\$IssueN|\{PartNumber\}|\{Part\}",
+        private static readonly Regex Mylar3PartTokenRegex = new Regex(@"\$Issue|\{PartNumber\}|\{Part\}",
                                                                           RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         protected override string GetDefaultMessageTemplate() => "Must contain Book Title AND PartNumber, OR Original Title";

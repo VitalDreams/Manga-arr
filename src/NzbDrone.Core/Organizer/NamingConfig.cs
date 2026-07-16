@@ -10,7 +10,7 @@ namespace NzbDrone.Core.Organizer
             RenameBooks = false,
             ReplaceIllegalCharacters = true,
             ColonReplacementFormat = ColonReplacementFormat.Smart,
-            StandardBookFormat = "$Series $IssueN ($Year)",
+            StandardBookFormat = "$Series $Issue ($Year)",
             AuthorFolderFormat = "$Series ($Year)",
         };
 

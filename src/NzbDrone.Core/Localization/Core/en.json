@@ -975,7 +975,7 @@
   "SslCertPathHelpTextWarning": "Requires restart to take effect",
   "SslPortHelpTextWarning": "Requires restart to take effect",
   "StandardBookFormat": "File Format",
-  "StandardBookFormatHelpText": "Use: $Series, $IssueN, $Year\nE.g.: $Series $IssueN ($Year) = Berserk 1 (2003)",
+  "StandardBookFormatHelpText": "Use: $Series, $Issue, $Year\nE.g.: $Series $Issue ($Year) = Berserk 1 (2003)",
   "StartTypingOrSelectAPathBelow": "Start typing or select a path below",
   "Started": "Started",
   "StartupDirectory": "Startup Directory",
