@@ -106,7 +106,12 @@ namespace Readarr.Api.V1.Manga
             {
                 var request = new HttpRequest(url);
                 var response = _httpClient.Get(request);
-                return File(response.ResponseData, "image/jpeg");
+
+                var contentType = response.Headers.ContentType ?? "image/jpeg";
+
+                Response.Headers["Cache-Control"] = "public, max-age=86400";
+
+                return File(response.ResponseData, contentType);
             }
             catch (Exception)
             {
