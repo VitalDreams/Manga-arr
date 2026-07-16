@@ -10,8 +10,8 @@ namespace NzbDrone.Core.Organizer
             RenameBooks = false,
             ReplaceIllegalCharacters = true,
             ColonReplacementFormat = ColonReplacementFormat.Smart,
-            StandardBookFormat = "{Author Name} {PartNumber} ({Release Year})",
-            AuthorFolderFormat = "{Author Name} ({Release Year})",
+            StandardBookFormat = "$Title $Part ($ReleaseYear)",
+            AuthorFolderFormat = "$Author ($ReleaseYear)",
         };
 
         public bool RenameBooks { get; set; }

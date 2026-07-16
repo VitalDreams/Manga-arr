@@ -56,6 +56,11 @@ namespace NzbDrone.Core.Organizer
 
         private static readonly Regex TitlePrefixRegex = new Regex(@"^(The|An|A) (.*?)((?: *\([^)]+\))*)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+        // Mylar3-style $ tokens: $Title, $Author, $PartNumber, $Part, $Publisher, $ReleaseYear, $Release Year
+        // Ordered longest-first so $PartNumber matches before $Part
+        private static readonly Regex Mylar3TokenRegex = new Regex(@"\$PartNumber|\$ReleaseYear|\$Release\sYear|\$Publisher|\$Author|\$Title|\$Part",
+                                                                     RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
         public FileNameBuilder(INamingConfigService namingConfigService,
                                IQualityDefinitionService qualityDefinitionService,
                                ICacheManager cacheManager,
@@ -104,6 +109,7 @@ namespace NzbDrone.Core.Organizer
             {
                 var splitPattern = s;
 
+                splitPattern = ReplaceMylar3Tokens(splitPattern);
                 var component = ReplacePartTokens(splitPattern, tokenHandlers, namingConfig).Trim();
                 component = ReplaceTokens(component, tokenHandlers, namingConfig).Trim();
 
@@ -238,6 +244,7 @@ namespace NzbDrone.Core.Organizer
         private void AddAuthorTokens(Dictionary<string, Func<TokenMatch, string>> tokenHandlers, Author author)
         {
             tokenHandlers["{Author Name}"] = m => author.Name;
+            tokenHandlers["{Author}"] = m => author.Name;
             tokenHandlers["{Author CleanName}"] = m => CleanTitle(author.Name);
             tokenHandlers["{Author NameThe}"] = m => TitleThe(author.Name);
             tokenHandlers["{Author SortName}"] = m => author?.Metadata?.Value?.NameLastFirst ?? string.Empty;
@@ -252,6 +259,7 @@ namespace NzbDrone.Core.Organizer
         private void AddBookTokens(Dictionary<string, Func<TokenMatch, string>> tokenHandlers, Edition edition)
         {
             tokenHandlers["{Book Title}"] = m => edition.Title;
+            tokenHandlers["{Title}"] = m => edition.Title;
             tokenHandlers["{Book CleanTitle}"] = m => CleanTitle(edition.Title);
             tokenHandlers["{Book TitleThe}"] = m => TitleThe(edition.Title);
 
@@ -284,14 +292,17 @@ namespace NzbDrone.Core.Organizer
             if (edition.ReleaseDate.HasValue)
             {
                 tokenHandlers["{Release Year}"] = m => edition.ReleaseDate.Value.Year.ToString();
+                tokenHandlers["{ReleaseYear}"] = m => edition.ReleaseDate.Value.Year.ToString();
             }
             else if (edition.Book.Value.ReleaseDate.HasValue)
             {
                 tokenHandlers["{Release Year}"] = m => edition.Book.Value.ReleaseDate.Value.Year.ToString();
+                tokenHandlers["{ReleaseYear}"] = m => edition.Book.Value.ReleaseDate.Value.Year.ToString();
             }
             else
             {
                 tokenHandlers["{Release Year}"] = m => "Unknown";
+                tokenHandlers["{ReleaseYear}"] = m => "Unknown";
             }
 
             if (edition.ReleaseDate.HasValue)
@@ -311,6 +322,8 @@ namespace NzbDrone.Core.Organizer
             {
                 tokenHandlers["{Release YearFirst}"] = m => "Unknown";
             }
+
+            tokenHandlers["{Publisher}"] = m => edition.Publisher ?? string.Empty;
         }
 
         private void AddBookFileTokens(Dictionary<string, Func<TokenMatch, string>> tokenHandlers, BookFile bookFile)
@@ -322,6 +335,7 @@ namespace NzbDrone.Core.Organizer
             if (bookFile.PartCount > 1)
             {
                 tokenHandlers["{PartNumber}"] = m => bookFile.Part.ToString(m.CustomFormat);
+                tokenHandlers["{Part}"] = m => bookFile.Part.ToString(m.CustomFormat);
                 tokenHandlers["{PartCount}"] = m => bookFile.PartCount.ToString(m.CustomFormat);
             }
         }
@@ -375,6 +389,31 @@ namespace NzbDrone.Core.Organizer
         private string ReplaceTokens(string pattern, Dictionary<string, Func<TokenMatch, string>> tokenHandlers, NamingConfig namingConfig)
         {
             return TitleRegex.Replace(pattern, match => ReplaceToken(match, tokenHandlers, namingConfig));
+        }
+
+        private static string ReplaceMylar3Tokens(string pattern)
+        {
+            return Mylar3TokenRegex.Replace(pattern, match =>
+            {
+                var token = match.Value.ToLowerInvariant().Replace(" ", "");
+                switch (token)
+                {
+                    case "$title":
+                        return "{Title}";
+                    case "$author":
+                        return "{Author}";
+                    case "$partnumber":
+                        return "{PartNumber}";
+                    case "$part":
+                        return "{Part}";
+                    case "$publisher":
+                        return "{Publisher}";
+                    case "$releaseyear":
+                        return "{Release Year}";
+                    default:
+                        return match.Value;
+                }
+            });
         }
 
         private string ReplaceToken(Match match, Dictionary<string, Func<TokenMatch, string>> tokenHandlers, NamingConfig namingConfig)

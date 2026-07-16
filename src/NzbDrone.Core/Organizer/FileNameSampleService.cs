@@ -33,9 +33,9 @@ namespace NzbDrone.Core.Organizer
             {
                 Metadata = new AuthorMetadata
                 {
-                    Name = "Berserk",
-                    Disambiguation = "US Author",
-                    NameLastFirst = "Last name, First name"
+                    Name = "Kentaro Miura",
+                    Disambiguation = "Manga",
+                    NameLastFirst = "Miura, Kentaro"
                 }
             };
 
@@ -52,7 +52,7 @@ namespace NzbDrone.Core.Organizer
 
             _standardBook = new Book
             {
-                Title = "Berserk Vol.1",
+                Title = "Berserk",
                 ReleaseDate = new System.DateTime(2003, 1, 1),
                 Author = _standardAuthor,
                 AuthorMetadata = _standardAuthor.Metadata.Value,
@@ -61,7 +61,8 @@ namespace NzbDrone.Core.Organizer
 
             _standardEdition = new Edition
             {
-                Title = "Berserk Vol.1",
+                Title = "Berserk",
+                Publisher = "Dark Horse Comics",
                 Book = _standardBook
             };
 
@@ -91,20 +92,20 @@ namespace NzbDrone.Core.Organizer
             _singleTrackFile = new BookFile
             {
                 Quality = new QualityModel(Quality.MP3, new Revision(2)),
-                Path = "/music/Author.Name.Book.Name.TrackNum.Track.Title.MP3256.mp3",
-                SceneName = "Author.Name.Book.Name.TrackNum.Track.Title.MP3256",
+                Path = "/manga/Kentaro Miura/Berserk/Berserk Vol.1.cbz",
+                SceneName = "Berserk Vol.1",
                 ReleaseGroup = "RlsGrp",
                 MediaInfo = mediaInfo,
                 Edition = _standardEdition,
                 Part = 1,
-                PartCount = 1
+                PartCount = 2
             };
 
             _multiTrackFile = new BookFile
             {
                 Quality = new QualityModel(Quality.MP3, new Revision(2)),
-                Path = "/music/Author.Name.Book.Name.TrackNum.Track.Title.MP3256.mp3",
-                SceneName = "Author.Name.Book.Name.TrackNum.Track.Title.MP3256",
+                Path = "/manga/Kentaro Miura/Berserk/Berserk Vol.1.cbz",
+                SceneName = "Berserk Vol.1",
                 ReleaseGroup = "RlsGrp",
                 MediaInfo = mediaInfo,
                 Edition = _standardEdition,

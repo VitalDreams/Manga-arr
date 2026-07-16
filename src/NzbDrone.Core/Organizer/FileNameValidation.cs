@@ -25,12 +25,17 @@ namespace NzbDrone.Core.Organizer
             ruleBuilder.SetValidator(new NotEmptyValidator(null));
             ruleBuilder.SetValidator(new IllegalCharactersValidator());
 
-            return ruleBuilder.SetValidator(new RegularExpressionValidator(FileNameBuilder.AuthorNameRegex)).WithMessage("Must contain Author name");
+            return ruleBuilder.SetValidator(new AuthorFolderFormatValidator()).WithMessage("Must contain Author name");
         }
     }
 
     public class ValidStandardTrackFormatValidator : PropertyValidator
     {
+        private static readonly Regex Mylar3TitleTokenRegex = new Regex(@"\$Title|\{Title\}",
+                                                                            RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        private static readonly Regex Mylar3PartTokenRegex = new Regex(@"\$PartNumber|\$Part|\{PartNumber\}|\{Part\}",
+                                                                          RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
         protected override string GetDefaultMessageTemplate() => "Must contain Book Title AND PartNumber, OR Original Title";
 
         protected override bool IsValid(PropertyValidatorContext context)
@@ -41,7 +46,26 @@ namespace NzbDrone.Core.Organizer
             }
 
             return (FileNameBuilder.BookTitleRegex.IsMatch(value) && FileNameBuilder.PartRegex.IsMatch(value)) ||
+                   (Mylar3TitleTokenRegex.IsMatch(value) && Mylar3PartTokenRegex.IsMatch(value)) ||
                    FileNameValidation.OriginalTokenRegex.IsMatch(value);
+        }
+    }
+
+    public class AuthorFolderFormatValidator : PropertyValidator
+    {
+        private static readonly Regex Mylar3AuthorTokenRegex = new Regex(@"\$Author|\{Author\}",
+                                                                            RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+        protected override string GetDefaultMessageTemplate() => "Must contain Author name";
+
+        protected override bool IsValid(PropertyValidatorContext context)
+        {
+            if (context.PropertyValue is not string value)
+            {
+                return false;
+            }
+
+            return FileNameBuilder.AuthorNameRegex.IsMatch(value) || Mylar3AuthorTokenRegex.IsMatch(value);
         }
     }
 
