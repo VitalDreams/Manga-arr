@@ -7,6 +7,7 @@ services:
       - "8192:8787"
     volumes:
       - /opt/containers/media-stack/config/mangaarr:/config
+      - /opt/containers/media-stack/config/mangaarr/readarr-config:/root/.config/Readarr
       - /mnt/media/Manga:/manga
     environment:
       - PUID=0

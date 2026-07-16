@@ -53,6 +53,11 @@ COPY --from=build /src/_output/net6.0/linux-x64/. /app/
 # Copy frontend UI
 COPY --from=build /src/_output/UI/. /app/UI/
 
+# Copy config template and entrypoint
+COPY config.xml /app/config.xml.template
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 # Expose port (8192 to avoid conflict with Sonarr on 8989)
 EXPOSE 8192
 
@@ -61,4 +66,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:8192/api/v1/health || exit 1
 
 # Run
-ENTRYPOINT ["dotnet", "Readarr.dll"]
+ENTRYPOINT ["/app/entrypoint.sh"]
