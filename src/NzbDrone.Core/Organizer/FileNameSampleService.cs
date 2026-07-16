@@ -33,7 +33,7 @@ namespace NzbDrone.Core.Organizer
             {
                 Metadata = new AuthorMetadata
                 {
-                    Name = "The Author Name",
+                    Name = "Berserk",
                     Disambiguation = "US Author",
                     NameLastFirst = "Last name, First name"
                 }
@@ -41,7 +41,7 @@ namespace NzbDrone.Core.Organizer
 
             var series = new Series
             {
-                Title = "Series Title"
+                Title = "Berserk"
             };
 
             var seriesLink = new SeriesBookLink
@@ -52,8 +52,8 @@ namespace NzbDrone.Core.Organizer
 
             _standardBook = new Book
             {
-                Title = "The Book Title",
-                ReleaseDate = System.DateTime.Today,
+                Title = "Berserk Vol.1",
+                ReleaseDate = new System.DateTime(2003, 1, 1),
                 Author = _standardAuthor,
                 AuthorMetadata = _standardAuthor.Metadata.Value,
                 SeriesLinks = new List<SeriesBookLink> { seriesLink }
@@ -61,7 +61,7 @@ namespace NzbDrone.Core.Organizer
 
             _standardEdition = new Edition
             {
-                Title = "The Edition Title",
+                Title = "Berserk Vol.1",
                 Book = _standardBook
             };
 
