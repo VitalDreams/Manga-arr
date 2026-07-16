@@ -70,15 +70,15 @@ namespace NzbDrone.Core.Qualities
             return !Equals(left, right);
         }
 
-        public static Quality Unknown => new Quality(0, "Unknown Text");
+        public static Quality Unknown => new Quality(0, "Unknown");
         public static Quality PDF => new Quality(1, "PDF");
-        public static Quality MOBI => new Quality(2, "MOBI");
-        public static Quality EPUB => new Quality(3, "EPUB");
-        public static Quality AZW3 => new Quality(4, "AZW3");
-        public static Quality MP3 => new Quality(10, "MP3");
-        public static Quality FLAC => new Quality(11, "FLAC");
-        public static Quality M4B => new Quality(12, "M4B");
-        public static Quality UnknownAudio => new Quality(13, "Unknown Audio");
+        public static Quality MOBI => new Quality(2, "CBZ");
+        public static Quality EPUB => new Quality(3, "CBR");
+        public static Quality AZW3 => new Quality(4, "PDF (Digital)");
+        public static Quality MP3 => new Quality(10, "ZIP");
+        public static Quality FLAC => new Quality(11, "7Z");
+        public static Quality M4B => new Quality(12, "RAR");
+        public static Quality UnknownAudio => new Quality(13, "Unknown Archive");
 
         static Quality()
         {

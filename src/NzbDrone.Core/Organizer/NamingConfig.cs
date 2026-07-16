@@ -10,7 +10,7 @@ namespace NzbDrone.Core.Organizer
             RenameBooks = false,
             ReplaceIllegalCharacters = true,
             ColonReplacementFormat = ColonReplacementFormat.Smart,
-            StandardBookFormat = "{Book Title}" + Path.DirectorySeparatorChar + "{Author Name} - {Book Title}{ (PartNumber)}",
+            StandardBookFormat = "{Author Name} - {Book Title}{ (PartNumber)}",
             AuthorFolderFormat = "{Author Name}",
         };
 

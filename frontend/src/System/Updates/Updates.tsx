@@ -284,8 +284,8 @@ function Updates() {
               <div>
                 <InlineMarkdown
                   data={translate('InstallMajorVersionUpdateMessageLink', {
-                    domain: 'readarr.com',
-                    url: 'https://readarr.com/#downloads',
+                    domain: 'github.com/VitalDreams/Manga-arr',
+                    url: 'https://github.com/VitalDreams/Manga-arr/releases',
                   })}
                 />
               </div>

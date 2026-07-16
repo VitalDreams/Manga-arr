@@ -42,10 +42,10 @@ namespace Readarr.Api.V1.Calendar
             var books = _bookService.BooksBetweenDates(start, end, unmonitored);
             var calendar = new Ical.Net.Calendar
             {
-                ProductId = "-//readarr.com//Readarr//EN"
+                ProductId = "-//VitalDreams//MangaArr//EN"
             };
 
-            var calendarName = "Readarr Book Schedule";
+            var calendarName = "MangaArr Schedule";
             calendar.AddProperty(new CalendarProperty("NAME", calendarName));
             calendar.AddProperty(new CalendarProperty("X-WR-CALNAME", calendarName));
 
@@ -59,7 +59,7 @@ namespace Readarr.Api.V1.Calendar
                 }
 
                 var occurrence = calendar.Create<CalendarEvent>();
-                occurrence.Uid = "Readarr_book_" + book.Id;
+                occurrence.Uid = "MangaArr_volume_" + book.Id;
 
                 //occurrence.Status = book.HasFile ? EventStatus.Confirmed : EventStatus.Tentative;
                 occurrence.Description = book.Editions.Value.Single(x => x.Monitored).Overview;

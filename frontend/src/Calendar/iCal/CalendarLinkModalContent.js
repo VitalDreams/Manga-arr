@@ -23,7 +23,7 @@ function getUrls(state) {
     tags
   } = state;
 
-  let icalUrl = `${window.location.host}${window.Readarr.urlBase}/feed/v1/calendar/Readarr.ics?`;
+  let icalUrl = `${window.location.host}${window.Readarr.urlBase}/feed/v1/calendar/MangaArr.ics?`;
 
   if (unmonitored) {
     icalUrl += 'unmonitored=true&';
@@ -108,7 +108,7 @@ class CalendarLinkModalContent extends Component {
     return (
       <ModalContent onModalClose={onModalClose}>
         <ModalHeader>
-          Readarr Calendar Feed
+          MangaArr Calendar Feed
         </ModalHeader>
 
         <ModalBody>

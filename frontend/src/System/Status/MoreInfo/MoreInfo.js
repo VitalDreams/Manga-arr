@@ -17,32 +17,22 @@ class MoreInfo extends Component {
         <DescriptionList>
           <DescriptionListItemTitle>Home page</DescriptionListItemTitle>
           <DescriptionListItemDescription>
-            <Link to="https://readarr.com/">readarr.com</Link>
+            <Link to="https://github.com/VitalDreams/Manga-arr">github.com/VitalDreams/Manga-arr</Link>
           </DescriptionListItemDescription>
 
           <DescriptionListItemTitle>Wiki</DescriptionListItemTitle>
           <DescriptionListItemDescription>
-            <Link to="https://wiki.servarr.com/readarr">Wiki</Link>
-          </DescriptionListItemDescription>
-
-          <DescriptionListItemTitle>Reddit</DescriptionListItemTitle>
-          <DescriptionListItemDescription>
-            <Link to="https://www.reddit.com/r/Readarr/">Readarr</Link>
-          </DescriptionListItemDescription>
-
-          <DescriptionListItemTitle>Discord</DescriptionListItemTitle>
-          <DescriptionListItemDescription>
-            <Link to="https://readarr.com/discord">Readarr on Discord</Link>
+            <Link to="https://github.com/VitalDreams/Manga-arr/wiki">Wiki</Link>
           </DescriptionListItemDescription>
 
           <DescriptionListItemTitle>Source</DescriptionListItemTitle>
           <DescriptionListItemDescription>
-            <Link to="https://github.com/readarr/Readarr/">github.com/Readarr/Readarr</Link>
+            <Link to="https://github.com/VitalDreams/Manga-arr/">github.com/VitalDreams/Manga-arr</Link>
           </DescriptionListItemDescription>
 
           <DescriptionListItemTitle>Feature Requests</DescriptionListItemTitle>
           <DescriptionListItemDescription>
-            <Link to="https://github.com/readarr/Readarr/issues">github.com/Readarr/Readarr/issues</Link>
+            <Link to="https://github.com/VitalDreams/Manga-arr/issues">github.com/VitalDreams/Manga-arr/issues</Link>
           </DescriptionListItemDescription>
 
         </DescriptionList>
