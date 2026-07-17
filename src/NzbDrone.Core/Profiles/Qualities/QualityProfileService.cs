@@ -98,13 +98,13 @@ namespace NzbDrone.Core.Profiles.Qualities
 
             _logger.Info("Setting up default quality profiles");
 
-            AddDefaultProfile("Standard",
+            AddDefaultProfile("Manga",
                 Quality.MOBI,
                 Quality.MOBI,
                 Quality.EPUB,
                 Quality.AZW3);
 
-            AddDefaultProfile("Spoken",
+            AddDefaultProfile("Archive",
                               Quality.MP3,
                               Quality.UnknownAudio,
                               Quality.MP3,
