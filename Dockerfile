@@ -58,12 +58,12 @@ COPY config.xml /app/config.xml.template
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
-# Expose port (8192 to avoid conflict with Sonarr on 8989)
-EXPOSE 8192
+# Expose port (8787 inside container, mapped to 8192 on host)
+EXPOSE 8787
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:8192/api/v1/health || exit 1
+    CMD curl -f http://localhost:8787/api/v1/health || exit 1
 
 # Run
 ENTRYPOINT ["/app/entrypoint.sh"]
