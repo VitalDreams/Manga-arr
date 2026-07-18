@@ -123,7 +123,7 @@ namespace Readarr.Api.V1.Manga
                     await _komga.TriggerLibraryScanAsync();
                     result.ImportedFiles.Add("Komga library scan triggered");
                 }
-                catch (System.Exception ex)
+                catch (global::System.Exception ex)
                 {
                     result.Errors.Add($"Failed to trigger Komga scan: {ex.Message}");
                 }
