@@ -86,7 +86,9 @@ namespace Readarr.Api.V1.Manga
         [RestPostById]
         public ActionResult<MangaResource> AddManga([FromBody] MangaResource mangaResource)
         {
-            var series = _mangaService.AddSeries(mangaResource.ToModel());
+            var series = mangaResource.ToModel();
+            series.CleanName = (mangaResource.Title ?? string.Empty).ToLowerInvariant().Replace(" ", string.Empty);
+            _mangaService.AddSeries(series);
 
             // Fetch volumes and chapters from MangaDex
             _mangaService.FetchAndStoreVolumes(series);
