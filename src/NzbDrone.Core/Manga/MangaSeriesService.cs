@@ -57,7 +57,10 @@ namespace NzbDrone.Core.Manga
 
         public MangaSeries AddSeries(MangaSeries newSeries)
         {
-            newSeries.CleanName = (newSeries.Name ?? string.Empty).ToLowerInvariant().Replace(" ", string.Empty);
+            if (string.IsNullOrEmpty(newSeries.CleanName))
+            {
+                newSeries.CleanName = (newSeries.Name ?? string.Empty).ToLowerInvariant().Replace(" ", string.Empty);
+            }
 
             var series = _seriesRepository.Insert(newSeries);
             _eventAggregator.PublishEvent(new MangaSeriesAddedEvent(series));
