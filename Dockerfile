@@ -31,11 +31,11 @@ RUN dotnet msbuild -restore Readarr.sln \
     -t:PublishAllRids \
     -p:TreatWarningsAsErrors=false \
     -nowarn:NU1902,NU1903 \
-    -verbosity:detailed 2>&1 | tee /tmp/msbuild.log; \
+    -verbosity:detailed > /tmp/msbuild.log 2>&1; \
     EXIT_CODE=$?; \
+    tail -20 /tmp/msbuild.log; \
     if [ $EXIT_CODE -ne 0 ]; then \
       echo "=== MSBUILD FAILED (exit code $EXIT_CODE) ==="; \
-      echo "=== Last 100 lines of build log ==="; \
       tail -100 /tmp/msbuild.log; \
       exit $EXIT_CODE; \
     fi
