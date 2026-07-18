@@ -45,6 +45,7 @@ namespace Readarr.Api.V1.Manga
         public DateTime Added { get; set; }
 
         public MangaStatisticsResource Statistics { get; set; }
+        public List<VolumeResource> Volumes { get; set; }
     }
 
     public class MangaStatisticsResource

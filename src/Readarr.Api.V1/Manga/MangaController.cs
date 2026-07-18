@@ -22,12 +22,14 @@ namespace Readarr.Api.V1.Manga
     {
         private readonly IMangaSeriesService _mangaService;
         private readonly IMangaSearchService _searchService;
+        private readonly IVolumeRepository _volumeRepository;
         private readonly IMapCoversToLocal _coverMapper;
         private readonly IHttpClient _httpClient;
 
         public MangaController(
             IMangaSeriesService mangaService,
             IMangaSearchService searchService,
+            IVolumeRepository volumeRepository,
             IMapCoversToLocal coverMapper,
             IHttpClient httpClient,
             IBroadcastSignalRMessage signalRBroadcaster)
@@ -35,6 +37,7 @@ namespace Readarr.Api.V1.Manga
         {
             _mangaService = mangaService;
             _searchService = searchService;
+            _volumeRepository = volumeRepository;
             _coverMapper = coverMapper;
             _httpClient = httpClient;
 
@@ -46,14 +49,37 @@ namespace Readarr.Api.V1.Manga
         protected override MangaResource GetResourceById(int id)
         {
             var series = _mangaService.GetSeries(id);
-            return series.ToResource();
+            var resource = series.ToResource();
+
+            // Include volumes in the response
+            var volumes = _volumeRepository.All()
+                .Where(v => v.MangaMetadataId == series.MangaMetadataId)
+                .OrderBy(v => v.VolumeNumber)
+                .ToList();
+            resource.Volumes = volumes.ToResource();
+
+            return resource;
         }
 
         [HttpGet]
         [Produces("application/json")]
         public List<MangaResource> AllManga()
         {
-            return _mangaService.GetAllSeries().ToResource();
+            var allSeries = _mangaService.GetAllSeries();
+            var resources = allSeries.ToResource();
+
+            // Include volumes for each series
+            var allVolumes = _volumeRepository.All().ToList();
+            foreach (var resource in resources)
+            {
+                resource.Volumes = allVolumes
+                    .Where(v => v.MangaMetadataId == resource.MangaMetadataId)
+                    .OrderBy(v => v.VolumeNumber)
+                    .ToList()
+                    .ToResource();
+            }
+
+            return resources;
         }
 
 
@@ -61,7 +87,18 @@ namespace Readarr.Api.V1.Manga
         public ActionResult<MangaResource> AddManga([FromBody] MangaResource mangaResource)
         {
             var series = _mangaService.AddSeries(mangaResource.ToModel());
+
+            // Fetch volumes and chapters from MangaDex
+            _mangaService.FetchAndStoreVolumes(series);
+
             var resource = series.ToResource();
+
+            // Include volumes in the response
+            var volumes = _volumeRepository.All()
+                .Where(v => v.MangaMetadataId == series.MangaMetadataId)
+                .OrderBy(v => v.VolumeNumber)
+                .ToList();
+            resource.Volumes = volumes.ToResource();
 
             // Map cover URL to local path after download
             if (resource.CoverUrl != null)
