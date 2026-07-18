@@ -198,6 +198,10 @@ namespace NzbDrone.Core.Datastore
                 .HasOne(s => s.Metadata, s => s.MangaMetadataId);
 
             Mapper.Entity<Volume>("Volumes").RegisterModel()
+                .Ignore(v => v.Links)
+                .Ignore(v => v.Genres)
+                .Ignore(v => v.RelatedVolumes)
+                .Ignore(v => v.Ratings)
                 .Ignore(v => v.MangaSeriesId)
                 .HasOne(v => v.MangaMetadata, v => v.MangaMetadataId);
 
