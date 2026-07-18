@@ -197,6 +197,13 @@ namespace NzbDrone.Core.Datastore
                 .Ignore(s => s.ForeignMangaId)
                 .HasOne(s => s.Metadata, s => s.MangaMetadataId);
 
+            Mapper.Entity<Volume>("Volumes").RegisterModel()
+                .Ignore(v => v.MangaSeriesId)
+                .HasOne(v => v.MangaMetadata, v => v.MangaMetadataId);
+
+            Mapper.Entity<Chapter>("Chapters").RegisterModel()
+                .HasOne(c => c.Volume, c => c.VolumeId);
+
             Mapper.Entity<StoryArc>("StoryArcs").RegisterModel()
                 .HasOne(a => a.MangaMetadata, a => a.MangaMetadataId);
 

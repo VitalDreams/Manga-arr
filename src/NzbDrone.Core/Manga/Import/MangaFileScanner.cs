@@ -28,14 +28,14 @@ namespace NzbDrone.Core.Manga.Import
         private readonly IDiskProvider _diskProvider;
         private readonly Logger _logger;
 
-        // Pattern: 'Berserk Vol.001 Ch.001.cbz' -> Series=Berserk, Volume=1, Chapter=1
+        // Pattern: 'Berserk Vol.001 Ch.001.cbz' or 'Berserk v01 c001.cbz'
         private static readonly Regex VolumeChapterPattern = new Regex(
-            @"^(.+?)[\s\-_.]+Vol\.?\s*(\d+)[\s\-_.]+Ch\.?\s*([\d.]+)",
+            @"^(.+?)[\s\-_.]+V(?:ol)?\.?\s*(\d+)[\s\-_.]+C(?:h)?\.?\s*([\d.]+)",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-        // Pattern: 'Berserk - Vol.001.cbz' -> Series=Berserk, Volume=1
+        // Pattern: 'Berserk - Vol.001.cbz' or 'Berserk.v01.2003.cbz'
         private static readonly Regex VolumeOnlyPattern = new Regex(
-            @"^(.+?)[\s\-_.]+Vol\.?\s*(\d+)",
+            @"^(.+?)[\s\-_.]+V(?:ol)?\.?\s*(\d+)",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         // Pattern: 'Berserk 1 (2003).cbz' -> Series=Berserk, Volume=1 (legacy Mylar3 format)
