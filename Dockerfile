@@ -31,8 +31,14 @@ RUN dotnet msbuild -restore Readarr.sln \
     -t:PublishAllRids \
     -p:TreatWarningsAsErrors=false \
     -nowarn:NU1902,NU1903 \
-    -verbosity:detailed \
-    -consoleloggerparameters:ErrorsOnly
+    -verbosity:detailed 2>&1 | tee /tmp/msbuild.log; \
+    EXIT_CODE=$?; \
+    if [ $EXIT_CODE -ne 0 ]; then \
+      echo "=== MSBUILD FAILED (exit code $EXIT_CODE) ==="; \
+      echo "=== Last 100 lines of build log ==="; \
+      tail -100 /tmp/msbuild.log; \
+      exit $EXIT_CODE; \
+    fi
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS runtime
