@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Common.Disk;
 using NzbDrone.Core.Manga;
 using NzbDrone.Core.Manga.Import;
 using Readarr.Http;
@@ -13,13 +15,22 @@ namespace Readarr.Api.V1.Manga
     {
         private readonly IMangaImportService _importService;
         private readonly IMangaFileScanner _fileScanner;
+        private readonly IMangaSeriesService _seriesService;
+        private readonly IKomgaIntegration _komga;
+        private readonly IDiskProvider _diskProvider;
 
         public MangaImportController(
             IMangaImportService importService,
-            IMangaFileScanner fileScanner)
+            IMangaFileScanner fileScanner,
+            IMangaSeriesService seriesService,
+            IKomgaIntegration komga,
+            IDiskProvider diskProvider)
         {
             _importService = importService;
             _fileScanner = fileScanner;
+            _seriesService = seriesService;
+            _komga = komga;
+            _diskProvider = diskProvider;
         }
 
         [HttpPost("import")]
@@ -86,6 +97,41 @@ namespace Readarr.Api.V1.Manga
             return Ok(scannedFiles.Select(f => f.ToResource()).ToList());
         }
 
+        [HttpPost("autoimport")]
+        public async Task<ActionResult<AutoImportResult>> AutoImport([FromBody] AutoImportResource resource)
+        {
+            var scanDirs = new List<string>();
+
+            if (resource?.Paths != null && resource.Paths.Any())
+            {
+                scanDirs.AddRange(resource.Paths);
+            }
+            else
+            {
+                // Default scan directories
+                scanDirs.Add("/manga");
+                scanDirs.Add("/downloads/complete/manga");
+            }
+
+            var result = await _importService.AutoImportFilesAsync(scanDirs);
+
+            // Trigger Komga library scan after import
+            if (result.FilesImported > 0)
+            {
+                try
+                {
+                    await _komga.TriggerLibraryScanAsync();
+                    result.ImportedFiles.Add("Komga library scan triggered");
+                }
+                catch (System.Exception ex)
+                {
+                    result.Errors.Add($"Failed to trigger Komga scan: {ex.Message}");
+                }
+            }
+
+            return Ok(result);
+        }
+
         private MangaImportMode ParseImportMode(string mode)
         {
             if (string.IsNullOrEmpty(mode))
@@ -105,5 +151,10 @@ namespace Readarr.Api.V1.Manga
     public class MangaScanResource : RestResource
     {
         public string Path { get; set; }
+    }
+
+    public class AutoImportResource : RestResource
+    {
+        public List<string> Paths { get; set; }
     }
 }

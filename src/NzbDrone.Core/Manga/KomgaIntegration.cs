@@ -30,6 +30,15 @@ namespace NzbDrone.Core.Manga
         {
             _httpClient = httpClient;
             _logger = logger;
+
+            // Read from environment variables (set via docker-compose Komga__BaseUrl / Komga__ApiKey)
+            BaseUrl = Environment.GetEnvironmentVariable("Komga__BaseUrl");
+            ApiKey = Environment.GetEnvironmentVariable("Komga__ApiKey");
+
+            if (!string.IsNullOrEmpty(BaseUrl))
+            {
+                _logger.Info("Komga configured at {0}", BaseUrl);
+            }
         }
 
         public async Task TriggerLibraryScanAsync()

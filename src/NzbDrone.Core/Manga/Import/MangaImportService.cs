@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Disk;
 using NzbDrone.Core.Books;
@@ -20,6 +21,17 @@ namespace NzbDrone.Core.Manga.Import
     {
         MangaSeries ImportSeries(string directoryPath, string foreignMangaId, MangaImportMode importMode = MangaImportMode.InPlace);
         MangaFile ImportFile(string filePath, int seriesId, int volumeId);
+        Task<AutoImportResult> AutoImportFilesAsync(List<string> scanDirectories);
+    }
+
+    public class AutoImportResult
+    {
+        public int FilesScanned { get; set; }
+        public int FilesMatched { get; set; }
+        public int FilesImported { get; set; }
+        public int FilesMoved { get; set; }
+        public List<string> ImportedFiles { get; set; } = new();
+        public List<string> Errors { get; set; } = new();
     }
 
     public class MangaImportService : IMangaImportService
@@ -160,6 +172,148 @@ namespace NzbDrone.Core.Manga.Import
             _fileService.Add(mangaFile);
             _logger.Info("Imported file {0} into series {1}, volume {2}", scanned.FileName, seriesId, volumeId);
             return mangaFile;
+        }
+
+        public Task<AutoImportResult> AutoImportFilesAsync(List<string> scanDirectories)
+        {
+            var result = new AutoImportResult();
+            var allSeries = _seriesService.GetAllSeries();
+
+            if (allSeries.Count == 0)
+            {
+                _logger.Warn("No series in library, nothing to auto-import");
+                return Task.FromResult(result);
+            }
+
+            // Build clean name lookup for matching
+            var seriesLookup = allSeries
+                .Where(s => !string.IsNullOrEmpty(s.CleanName))
+                .ToDictionary(s => s.CleanName, s => s, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var scanDir in scanDirectories)
+            {
+                if (!_diskProvider.FolderExists(scanDir))
+                {
+                    _logger.Debug("Scan directory does not exist, skipping: {0}", scanDir);
+                    continue;
+                }
+
+                var scannedFiles = _fileScanner.ScanDirectory(scanDir);
+                result.FilesScanned += scannedFiles.Count;
+
+                foreach (var scanned in scannedFiles)
+                {
+                    try
+                    {
+                        // Match file to an existing series by clean name
+                        var cleanFileName = scanned.SeriesName?.ToLowerInvariant().Replace(" ", "") ?? string.Empty;
+
+                        if (!seriesLookup.TryGetValue(cleanFileName, out var matchedSeries))
+                        {
+                            _logger.Debug("No library match for file '{0}' (parsed series: '{1}')", scanned.FileName, scanned.SeriesName);
+                            continue;
+                        }
+
+                        result.FilesMatched++;
+
+                        if (!scanned.VolumeNumber.HasValue)
+                        {
+                            _logger.Warn("Cannot import '{0}': no volume number parsed", scanned.FileName);
+                            result.Errors.Add($"No volume number parsed from '{scanned.FileName}'");
+                            continue;
+                        }
+
+                        // Find or create the volume record
+                        var volume = FindOrCreateVolume(matchedSeries, scanned.VolumeNumber.Value);
+
+                        // Determine target path: move to /manga/{SeriesName}/
+                        var targetPath = scanned.FilePath;
+                        var isDownloadDir = scanDir.StartsWith("/downloads", StringComparison.OrdinalIgnoreCase) ||
+                                            scanDir.Contains("downloads");
+
+                        if (isDownloadDir)
+                        {
+                            var seriesFolder = _namingService.GetSeriesFolder(matchedSeries);
+                            var targetDir = Path.Combine(matchedSeries.RootFolderPath ?? "/manga", seriesFolder);
+
+                            if (!_diskProvider.FolderExists(targetDir))
+                            {
+                                _diskProvider.CreateFolder(targetDir);
+                            }
+
+                            targetPath = Path.Combine(targetDir, scanned.FileName);
+
+                            if (!_diskProvider.FileExists(targetPath))
+                            {
+                                _diskProvider.MoveFile(scanned.FilePath, targetPath);
+                                result.FilesMoved++;
+                                _logger.Info("Moved '{0}' -> '{1}'", scanned.FilePath, targetPath);
+                            }
+                            else
+                            {
+                                _logger.Info("File already exists at target, importing in-place: {0}", targetPath);
+                            }
+                        }
+
+                        // Create MangaFile record
+                        var mangaFile = new MangaFile
+                        {
+                            VolumeId = volume.Id,
+                            MangaSeriesId = matchedSeries.Id,
+                            Path = targetPath,
+                            FileName = scanned.FileName,
+                            RelativePath = Path.GetFileName(targetPath),
+                            Size = scanned.FileSize,
+                            AddedAt = DateTime.UtcNow,
+                            IsVolumePack = true
+                        };
+
+                        _fileService.Add(mangaFile);
+                        result.FilesImported++;
+                        result.ImportedFiles.Add(scanned.FileName);
+                        _logger.Info("Imported '{0}' into {1} volume {2}", scanned.FileName, matchedSeries.Name, scanned.VolumeNumber.Value);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error(ex, "Failed to auto-import file '{0}'", scanned.FileName);
+                        result.Errors.Add($"Error importing '{scanned.FileName}': {ex.Message}");
+                    }
+                }
+            }
+
+            _logger.Info("Auto-import complete: {0} scanned, {1} matched, {2} imported, {3} moved",
+                result.FilesScanned, result.FilesMatched, result.FilesImported, result.FilesMoved);
+
+            return Task.FromResult(result);
+        }
+
+        private Volume FindOrCreateVolume(MangaSeries series, int volumeNumber)
+        {
+            var existing = _volumeRepository.All()
+                .FirstOrDefault(v => v.MangaMetadataId == series.MangaMetadataId && v.VolumeNumber == volumeNumber);
+
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            var volume = new Volume
+            {
+                ForeignVolumeId = $"{series.ForeignMangaId}_vol{volumeNumber}",
+                Title = $"Volume {volumeNumber}",
+                TitleSlug = $"volume-{volumeNumber}",
+                VolumeNumber = volumeNumber,
+                CleanTitle = $"volume {volumeNumber}",
+                Monitored = true,
+                AnyEditionOk = true,
+                Added = DateTime.UtcNow,
+                MangaMetadataId = series.MangaMetadataId
+            };
+
+            volume.MangaSeries = new MangaSeries { Id = series.Id };
+            volume.MangaMetadata = new MangaMetadata { Id = series.MangaMetadataId };
+
+            return _volumeRepository.Insert(volume);
         }
 
         private MangaMetadata FetchMetadata(string foreignMangaId)
