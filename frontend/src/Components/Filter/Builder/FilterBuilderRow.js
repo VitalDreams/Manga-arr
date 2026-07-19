@@ -5,6 +5,7 @@ import IconButton from 'Components/Link/IconButton';
 import { filterBuilderTypes, filterBuilderValueTypes, icons } from 'Helpers/Props';
 import AuthorStatusFilterBuilderRowValue from './AuthorStatusFilterBuilderRowValue';
 import BoolFilterBuilderRowValue from './BoolFilterBuilderRowValue';
+import ContentTypeFilterBuilderRowValue from './ContentTypeFilterBuilderRowValue';
 import DateFilterBuilderRowValue from './DateFilterBuilderRowValue';
 import FilterBuilderRowValueConnector from './FilterBuilderRowValueConnector';
 import IndexerFilterBuilderRowValueConnector from './IndexerFilterBuilderRowValueConnector';
@@ -74,6 +75,9 @@ function getRowValueConnector(selectedFilterBuilderProp) {
 
     case filterBuilderValueTypes.AUTHOR_STATUS:
       return AuthorStatusFilterBuilderRowValue;
+
+    case filterBuilderValueTypes.CONTENT_TYPE:
+      return ContentTypeFilterBuilderRowValue;
 
     case filterBuilderValueTypes.TAG:
       return TagFilterBuilderRowValueConnector;

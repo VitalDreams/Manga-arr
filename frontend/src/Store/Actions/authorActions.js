@@ -78,6 +78,50 @@ export const filters = [
         type: filterTypes.EQUAL
       }
     ]
+  },
+  {
+    key: 'manga',
+    label: 'Manga Only',
+    filters: [
+      {
+        key: 'contentType',
+        value: 0,
+        type: filterTypes.EQUAL
+      }
+    ]
+  },
+  {
+    key: 'manhwa',
+    label: 'Manhwa Only',
+    filters: [
+      {
+        key: 'contentType',
+        value: 1,
+        type: filterTypes.EQUAL
+      }
+    ]
+  },
+  {
+    key: 'manhua',
+    label: 'Manhua Only',
+    filters: [
+      {
+        key: 'contentType',
+        value: 2,
+        type: filterTypes.EQUAL
+      }
+    ]
+  },
+  {
+    key: 'otherContentType',
+    label: 'Other Content Type',
+    filters: [
+      {
+        key: 'contentType',
+        value: 3,
+        type: filterTypes.EQUAL
+      }
+    ]
   }
 ];
 

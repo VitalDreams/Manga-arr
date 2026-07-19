@@ -26,7 +26,7 @@ const links = [
     alias: '/authors',
     children: [
       {
-        title: () => translate('Author'),
+        title: () => translate('Mangaka'),
         to: '/authors'
       },
       {

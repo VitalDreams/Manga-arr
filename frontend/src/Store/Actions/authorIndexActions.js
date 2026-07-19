@@ -308,6 +308,12 @@ export const defaultState = {
       }
     },
     {
+      name: 'contentType',
+      label: 'Content Type',
+      type: filterBuilderTypes.EXACT,
+      valueType: filterBuilderValueTypes.CONTENT_TYPE
+    },
+    {
       name: 'ratings',
       label: 'Rating',
       type: filterBuilderTypes.NUMBER

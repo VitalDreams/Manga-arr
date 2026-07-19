@@ -8,4 +8,5 @@ export const PROTOCOL = 'protocol';
 export const QUALITY = 'quality';
 export const QUALITY_PROFILE = 'qualityProfile';
 export const AUTHOR_STATUS = 'authorStatus';
+export const CONTENT_TYPE = 'contentType';
 export const TAG = 'tag';
