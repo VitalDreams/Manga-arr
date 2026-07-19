@@ -205,6 +205,7 @@ namespace NzbDrone.Core.Datastore
                 .Ignore(v => v.MangaSeries)
                 .Ignore(v => v.Chapters)
                 .Ignore(v => v.MangaFiles)
+                .Ignore(v => v.AddOptions)
                 .HasOne(v => v.MangaMetadata, v => v.MangaMetadataId);
 
             Mapper.Entity<Chapter>("Chapters").RegisterModel()
