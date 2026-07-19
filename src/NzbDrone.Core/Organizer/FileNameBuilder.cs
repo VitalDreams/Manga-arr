@@ -42,10 +42,10 @@ namespace NzbDrone.Core.Organizer
         public static readonly Regex SeasonEpisodePatternRegex = new Regex(@"(?<separator>(?<=})[- ._]+?)?(?<seasonEpisode>s?{season(?:\:0+)?}(?<episodeSeparator>[- ._]?[ex])(?<episode>{episode(?:\:0+)?}))(?<separator>[- ._]+?(?={))?",
                                                                             RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
-        public static readonly Regex AuthorNameRegex = new Regex(@"(?<token>\{(?:Author)(?<separator>[- ._])(Clean)?(Sort)?Name(The)?\})",
+        public static readonly Regex AuthorNameRegex = new Regex(@"(?<token>\{(?:Author|Mangaka)(?<separator>[- ._])(Clean)?(Sort)?Name(The)?\})",
                                                                             RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
-        public static readonly Regex BookTitleRegex = new Regex(@"(?<token>\{(?:Book)(?<separator>[- ._])(Clean)?Title(The)?(NoSub)?\})",
+        public static readonly Regex BookTitleRegex = new Regex(@"(?<token>\{(?:Book|Volume|Manga)(?<separator>[- ._])(Clean)?Title(The)?(NoSub)?\})",
                                                                             RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         private static readonly Regex FileNameCleanupRegex = new Regex(@"([- ._])(\1)+", RegexOptions.Compiled);
@@ -242,34 +242,50 @@ namespace NzbDrone.Core.Organizer
 
         private void AddAuthorTokens(Dictionary<string, Func<TokenMatch, string>> tokenHandlers, Author author)
         {
+            tokenHandlers["{Mangaka Name}"] = m => author.Name;
             tokenHandlers["{Author Name}"] = m => author.Name;
+            tokenHandlers["{Mangaka}"] = m => author.Name;
             tokenHandlers["{Author}"] = m => author.Name;
+            tokenHandlers["{Mangaka CleanName}"] = m => CleanTitle(author.Name);
             tokenHandlers["{Author CleanName}"] = m => CleanTitle(author.Name);
+            tokenHandlers["{Mangaka NameThe}"] = m => TitleThe(author.Name);
             tokenHandlers["{Author NameThe}"] = m => TitleThe(author.Name);
+            tokenHandlers["{Mangaka SortName}"] = m => author?.Metadata?.Value?.NameLastFirst ?? string.Empty;
             tokenHandlers["{Author SortName}"] = m => author?.Metadata?.Value?.NameLastFirst ?? string.Empty;
+            tokenHandlers["{Mangaka NameFirstCharacter}"] = m => TitleThe(author.Name).Substring(0, 1).FirstCharToUpper();
             tokenHandlers["{Author NameFirstCharacter}"] = m => TitleThe(author.Name).Substring(0, 1).FirstCharToUpper();
 
             if (author.Metadata.Value.Disambiguation != null)
             {
+                tokenHandlers["{Mangaka Disambiguation}"] = m => author.Metadata.Value.Disambiguation;
                 tokenHandlers["{Author Disambiguation}"] = m => author.Metadata.Value.Disambiguation;
             }
         }
 
         private void AddBookTokens(Dictionary<string, Func<TokenMatch, string>> tokenHandlers, Edition edition)
         {
+            tokenHandlers["{Volume Title}"] = m => edition.Title;
             tokenHandlers["{Book Title}"] = m => edition.Title;
             tokenHandlers["{Title}"] = m => edition.Title;
+            tokenHandlers["{Volume CleanTitle}"] = m => CleanTitle(edition.Title);
             tokenHandlers["{Book CleanTitle}"] = m => CleanTitle(edition.Title);
+            tokenHandlers["{Volume TitleThe}"] = m => TitleThe(edition.Title);
             tokenHandlers["{Book TitleThe}"] = m => TitleThe(edition.Title);
 
             var (titleNoSub, subtitle) = edition.Title.SplitBookTitle(edition.Book.Value.AuthorMetadata.Value.Name);
 
+            tokenHandlers["{Volume TitleNoSub}"] = m => titleNoSub;
             tokenHandlers["{Book TitleNoSub}"] = m => titleNoSub;
+            tokenHandlers["{Volume CleanTitleNoSub}"] = m => CleanTitle(titleNoSub);
             tokenHandlers["{Book CleanTitleNoSub}"] = m => CleanTitle(titleNoSub);
+            tokenHandlers["{Volume TitleTheNoSub}"] = m => TitleThe(titleNoSub);
             tokenHandlers["{Book TitleTheNoSub}"] = m => TitleThe(titleNoSub);
 
+            tokenHandlers["{Volume Subtitle}"] = m => subtitle;
             tokenHandlers["{Book Subtitle}"] = m => subtitle;
+            tokenHandlers["{Volume CleanSubtitle}"] = m => CleanTitle(subtitle);
             tokenHandlers["{Book CleanSubtitle}"] = m => CleanTitle(subtitle);
+            tokenHandlers["{Volume SubtitleThe}"] = m => TitleThe(subtitle);
             tokenHandlers["{Book SubtitleThe}"] = m => TitleThe(subtitle);
 
             var seriesLinks = edition.Book.Value.SeriesLinks.Value;
@@ -278,13 +294,17 @@ namespace NzbDrone.Core.Organizer
                 var primarySeries = seriesLinks.OrderBy(x => x.SeriesPosition).First();
                 var seriesTitle = primarySeries.Series?.Value?.Title + (primarySeries.Position.IsNotNullOrWhiteSpace() ? $" #{primarySeries.Position}" : string.Empty);
 
+                tokenHandlers["{Manga Series}"] = m => primarySeries.Series.Value.Title;
                 tokenHandlers["{Book Series}"] = m => primarySeries.Series.Value.Title;
+                tokenHandlers["{Manga SeriesPosition}"] = m => primarySeries.Position;
                 tokenHandlers["{Book SeriesPosition}"] = m => primarySeries.Position;
+                tokenHandlers["{Manga SeriesTitle}"] = m => seriesTitle;
                 tokenHandlers["{Book SeriesTitle}"] = m => seriesTitle;
             }
 
             if (edition.Disambiguation != null)
             {
+                tokenHandlers["{Volume Disambiguation}"] = m => edition.Disambiguation;
                 tokenHandlers["{Book Disambiguation}"] = m => edition.Disambiguation;
             }
 

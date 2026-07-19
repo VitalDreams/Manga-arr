@@ -92,15 +92,15 @@ class Naming extends Component {
 
     if (examplesPopulated) {
       if (examples.singleBookExample) {
-        standardBookFormatHelpTexts.push(`Single Book: ${examples.singleBookExample}`);
+        standardBookFormatHelpTexts.push(`Single Volume: ${examples.singleBookExample}`);
       } else {
-        standardBookFormatErrors.push({ message: 'Single Book: Invalid Format' });
+        standardBookFormatErrors.push({ message: 'Single Volume: Invalid Format' });
       }
 
       if (examples.multiPartBookExample) {
-        standardBookFormatHelpTexts.push(`Multi-part Book: ${examples.multiPartBookExample}`);
+        standardBookFormatHelpTexts.push(`Multi-part Volume: ${examples.multiPartBookExample}`);
       } else {
-        standardBookFormatErrors.push({ message: 'Multi-part Book: Invalid Format' });
+        standardBookFormatErrors.push({ message: 'Multi-part Volume: Invalid Format' });
       }
 
       if (examples.authorFolderExample) {
@@ -111,7 +111,7 @@ class Naming extends Component {
     }
 
     return (
-      <FieldSet legend={translate('BookNaming')}>
+      <FieldSet legend="Manga Naming">
         {
           isFetching &&
             <LoadingIndicator />
@@ -129,7 +129,7 @@ class Naming extends Component {
             <Form>
               <FormGroup size={sizes.MEDIUM}>
                 <FormLabel>
-                  {translate('RenameBooks')}
+                  Rename Volumes
                 </FormLabel>
 
                 <FormInputGroup
@@ -178,7 +178,7 @@ class Naming extends Component {
                   <div>
                     <FormGroup size={sizes.LARGE}>
                       <FormLabel>
-                        {translate('StandardBookFormat')}
+                        Volume Format
                       </FormLabel>
 
                       <FormInputGroup
@@ -200,7 +200,7 @@ class Naming extends Component {
                 isAdvanced={true}
               >
                 <FormLabel>
-                  {translate('AuthorFolderFormat')}
+                  Mangaka Folder Format
                 </FormLabel>
 
                 <FormInputGroup
@@ -210,7 +210,7 @@ class Naming extends Component {
                   buttons={<FormInputButton onPress={this.onAuthorFolderNamingModalOpenClick}>?</FormInputButton>}
                   onChange={onInputChange}
                   {...settings.authorFolderFormat}
-                  helpTexts={['Used when adding a new author or moving an author via the author editor', ...authorFolderFormatHelpTexts]}
+                  helpTexts={['Used when adding a new mangaka or moving a mangaka via the mangaka editor', ...authorFolderFormatHelpTexts]}
                   errors={[...authorFolderFormatErrors, ...settings.authorFolderFormat.errors]}
                 />
               </FormGroup>

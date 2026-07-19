@@ -29,79 +29,79 @@ const caseOptions = [
 
 const fileNameTokens = [
   {
-    token: '{Author Name} - {Book Title} - {Quality Full}',
-    example: 'Author Name - Book Title - MP3 Proper'
+    token: '{Mangaka Name} - {Volume Title} - {Quality Full}',
+    example: 'Kentaro Miura - Berserk - CBZ Proper'
   },
   {
-    token: '{Author.Name}.{Book.Title}.{Quality.Full}',
-    example: 'Author.Name.Book.Title.MP3'
+    token: '{Mangaka.Name}.{Volume.Title}.{Quality.Full}',
+    example: 'Kentaro.Miura.Berserk.CBZ'
   },
   {
-    token: '{Author Name} - {Book Title}{ (PartNumber)}',
-    example: 'Author Name - Book Title (2)'
+    token: '{Mangaka Name} - {Volume Title}{ (PartNumber)}',
+    example: 'Kentaro Miura - Berserk (2)'
   },
   {
-    token: '{Author Name} - {Book Title}{ (PartNumber/PartCount)}',
-    example: 'Author Name - Book Title (2/10)'
+    token: '{Mangaka Name} - {Volume Title}{ (PartNumber/PartCount)}',
+    example: 'Kentaro Miura - Berserk (2/41)'
   }
 ];
 
 const authorTokens = [
-  { token: '{Author Name}', example: 'Author\'s Name' },
+  { token: '{Mangaka Name}', example: 'Kentaro Miura' },
 
-  { token: '{Author NameThe}', example: 'Author\'s Name, The' },
+  { token: '{Mangaka NameThe}', example: 'Miura, Kentaro' },
 
-  { token: '{Author NameFirstCharacter}', example: 'A' },
+  { token: '{Mangaka NameFirstCharacter}', example: 'K' },
 
-  { token: '{Author CleanName}', example: 'Authors Name' },
+  { token: '{Mangaka CleanName}', example: 'Kentaro Miura' },
 
-  { token: '{Author SortName}', example: 'Name, Author' },
+  { token: '{Mangaka SortName}', example: 'Miura, Kentaro' },
 
-  { token: '{Author Disambiguation}', example: 'Disambiguation' }
+  { token: '{Mangaka Disambiguation}', example: 'Disambiguation' }
 ];
 
 const bookTokens = [
-  { token: '{Book Title}', example: 'The Book\'s Title!: Subtitle!' },
+  { token: '{Volume Title}', example: 'Berserk: The Black Swordsman' },
 
-  { token: '{Book TitleThe}', example: 'Book\'s Title!, The: Subtitle!' },
+  { token: '{Volume TitleThe}', example: 'Black Swordsman, The: Berserk' },
 
-  { token: '{Book CleanTitle}', example: 'The Books Title!: Subtitle' },
+  { token: '{Volume CleanTitle}', example: 'Berserk The Black Swordsman' },
 
-  { token: '{Book TitleNoSub}', example: 'The Book\'s Title!' },
+  { token: '{Volume TitleNoSub}', example: 'Berserk' },
 
-  { token: '{Book TitleTheNoSub}', example: 'Book\'s Title!, The' },
+  { token: '{Volume TitleTheNoSub}', example: 'Black Swordsman, The' },
 
-  { token: '{Book CleanTitleNoSub}', example: 'The Books Title!' },
+  { token: '{Volume CleanTitleNoSub}', example: 'Berserk' },
 
-  { token: '{Book Subtitle}', example: 'Subtitle!' },
+  { token: '{Volume Subtitle}', example: 'The Black Swordsman' },
 
-  { token: '{Book SubtitleThe}', example: 'Subtitle!, The' },
+  { token: '{Volume SubtitleThe}', example: 'Black Swordsman, The' },
 
-  { token: '{Book CleanSubtitle}', example: 'Subtitle' },
+  { token: '{Volume CleanSubtitle}', example: 'The Black Swordsman' },
 
-  { token: '{Book Disambiguation}', example: 'Disambiguation' },
+  { token: '{Volume Disambiguation}', example: 'Disambiguation' },
 
-  { token: '{Book Series}', example: 'Series Title' },
+  { token: '{Manga Series}', example: 'Berserk' },
 
-  { token: '{Book SeriesPosition}', example: '1' },
+  { token: '{Manga SeriesPosition}', example: '1' },
 
-  { token: '{Book SeriesTitle}', example: 'Series Title #1' },
+  { token: '{Manga SeriesTitle}', example: 'Berserk #1' },
 
   { token: '{PartNumber:0}', example: '2' },
   { token: '{PartNumber:00}', example: '02' },
-  { token: '{PartCount:0}', example: '9' },
-  { token: '{PartCount:00}', example: '09' }
+  { token: '{PartCount:0}', example: '41' },
+  { token: '{PartCount:00}', example: '41' }
 ];
 
 const releaseDateTokens = [
-  { token: '{Release Year}', example: '2016' },
-  { token: '{Release YearFirst}', example: '2015' },
-  { token: '{Edition Year}', example: '2016' }
+  { token: '{Release Year}', example: '2003' },
+  { token: '{Release YearFirst}', example: '2003' },
+  { token: '{Edition Year}', example: '2003' }
 ];
 
 const qualityTokens = [
-  { token: '{Quality Full}', example: 'AZW3 Proper' },
-  { token: '{Quality Title}', example: 'AZW3' }
+  { token: '{Quality Full}', example: 'CBZ Proper' },
+  { token: '{Quality Title}', example: 'CBZ' }
 ];
 
 const mediaInfoTokens = [
@@ -113,13 +113,13 @@ const mediaInfoTokens = [
 ];
 
 const otherTokens = [
-  { token: '{Release Group}', example: 'Rls Grp' },
+  { token: '{Release Group}', example: 'danke-Empire' },
   { token: '{Custom Formats}', example: 'iNTERNAL' }
 ];
 
 const originalTokens = [
-  { token: '{Original Title}', example: 'Author.Name.Book.Name.2018.AZW3-EVOLVE' },
-  { token: '{Original Filename}', example: '01 - book name' }
+  { token: '{Original Title}', example: 'Kentaro.Miura.Berserk.2003.CBZ-EVOLVE' },
+  { token: '{Original Filename}', example: '01 - berserk' }
 ];
 
 class NamingModal extends Component {
@@ -259,7 +259,7 @@ class NamingModal extends Component {
                 </FieldSet>
             }
 
-            <FieldSet legend={translate('Author')}>
+            <FieldSet legend="Mangaka">
               <div className={styles.groups}>
                 {
                   authorTokens.map(({ token, example }) => {
@@ -284,7 +284,7 @@ class NamingModal extends Component {
             {
               book &&
                 <div>
-                  <FieldSet legend={translate('Book')}>
+                  <FieldSet legend="Volume">
                     <div className={styles.groups}>
                       {
                         bookTokens.map(({ token, example }) => {

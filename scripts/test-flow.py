@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Add Berserk and auto-import"""
+"""Clean test: add Berserk + auto-import"""
 import json, subprocess
 
 def run(cmd):
-    r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+    r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=60)
     return r.stdout.strip()
 
 APIKEY = run("docker exec mangaarr cat /root/.config/Readarr/config.xml | grep ApiKey | sed 's/.*<ApiKey>//;s/<.*//'")
@@ -17,14 +17,13 @@ def api(method, path, data=None):
         cmd += ' -d @/tmp/api_body.json'
     return run(cmd)
 
-# Delete old entries
-print("=== DELETE OLD ===")
-for i in range(1, 10):
-    api("DELETE", f"/manga/{i}")
+# Clean slate
+print("=== CLEANUP ===")
+run('docker exec mangaarr sqlite3 /root/.config/Readarr/readarr.db "DELETE FROM MangaFiles; DELETE FROM Volumes; DELETE FROM MangaSeries; DELETE FROM MangaMetadata;"')
 
 # Add Berserk
 print("=== ADD BERSERK ===")
-add_data = {
+r = api("POST", "/manga", {
     "foreignMangaId": "801513ba-a712-498c-8f57-cae55b38cc92",
     "title": "Berserk",
     "titleSlug": "berserk",
@@ -33,20 +32,26 @@ add_data = {
     "qualityProfileId": 1,
     "metadataProfileId": 1,
     "monitored": True
-}
-r = api("POST", "/manga", add_data)
-print(r[:300])
-
-# Check CleanName
-print("\n=== CLEANNAME ===")
-r = run('docker exec mangaarr sqlite3 /root/.config/Readarr/readarr.db "SELECT Id, CleanName FROM MangaSeries;"')
-print(r)
+})
+print(r[:150])
 
 # Auto-import
 print("\n=== AUTO-IMPORT ===")
-import_data = {"scanDirectories": ["/manga", "/downloads/complete/manga"]}
-r = api("POST", "/manga/autoimport", import_data)
-print(r[:500])
+r = api("POST", "/manga/autoimport", {"scanDirectories": ["/manga", "/downloads/complete/manga"]})
+try:
+    result = json.loads(r)
+    print(f"Scanned: {result.get('filesScanned',0)}")
+    print(f"Matched: {result.get('filesMatched',0)}")
+    print(f"Imported: {result.get('filesImported',0)}")
+    print(f"Moved: {result.get('filesMoved',0)}")
+    if result.get('importedFiles'):
+        for f in result['importedFiles'][:5]:
+            print(f"  + {f}")
+    if result.get('errors'):
+        for e in result['errors'][:3]:
+            print(f"  ! {e}")
+except:
+    print(r[:500])
 
 # Library
 print("\n=== LIBRARY ===")
@@ -55,6 +60,6 @@ try:
     manga = json.loads(r)
     print(f"{len(manga)} manga in library")
     for m in manga:
-        print(f"  - {m.get('title', '?')} (CleanName: {m.get('cleanName', '?')})")
+        print(f"  - {m.get('title', '?')} ({m.get('cleanName', '?')})")
 except:
     print(r[:200])
