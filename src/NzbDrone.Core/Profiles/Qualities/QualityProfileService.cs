@@ -104,6 +104,12 @@ namespace NzbDrone.Core.Profiles.Qualities
                 Quality.EPUB,
                 Quality.AZW3);
 
+            AddDefaultProfile("Manhwa",
+                Quality.MOBI,
+                Quality.MOBI,
+                Quality.EPUB,
+                Quality.AZW3);
+
             AddDefaultProfile("Archive",
                               Quality.MP3,
                               Quality.UnknownAudio,
