@@ -307,10 +307,10 @@ namespace NzbDrone.Core.Manga.Import
                 Monitored = true,
                 AnyEditionOk = true,
                 Added = DateTime.UtcNow,
-                MangaMetadataId = series.MangaMetadataId
+                MangaMetadataId = series.MangaMetadataId,
+                MangaSeriesId = series.Id
             };
 
-            volume.MangaSeries = new MangaSeries { Id = series.Id };
             volume.MangaMetadata = new MangaMetadata { Id = series.MangaMetadataId };
 
             return _volumeRepository.Insert(volume);

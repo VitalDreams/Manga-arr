@@ -55,14 +55,10 @@ namespace NzbDrone.Core.Manga
         [MemberwiseEqualityIgnore]
         public LazyLoaded<List<MangaFile>> MangaFiles { get; set; }
 
-        // Compatibility
+        // Database column - FK to MangaSeries
         [MemberwiseEqualityIgnore]
         [JsonIgnore]
-        public int MangaSeriesId
-        {
-            get { return MangaSeries?.Value?.Id ?? 0; }
-            set { MangaSeries.Value.Id = value; }
-        }
+        public int MangaSeriesId { get; set; }
 
         public override string ToString()
         {
