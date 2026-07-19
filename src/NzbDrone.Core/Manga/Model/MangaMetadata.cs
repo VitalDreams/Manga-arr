@@ -29,6 +29,7 @@ namespace NzbDrone.Core.Manga
         public string Demographic { get; set; }  // shonen, shoujo, seinen, josei
         public string Status { get; set; }  // ongoing, completed, hiatus, cancelled
         public string ContentRating { get; set; }  // safe, suggestive, erotica
+        public ContentType ContentType { get; set; }
         public int Year { get; set; }
         public int TotalVolumes { get; set; }
         public int TotalChapters { get; set; }

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Common.Http;
 using NzbDrone.Common.Serializer;
+using NzbDrone.Core.Books;
 
 namespace NzbDrone.Core.Manga.Connectors
 {
@@ -42,7 +43,14 @@ namespace NzbDrone.Core.Manga.Connectors
                 Year = m.Attributes?.Year ?? 0,
                 CoverUrl = GetCoverUrl(m),
                 Genres = m.Attributes?.Tags?.Where(t => t.Attributes?.Group == "genre").Select(t => t.Attributes?.Name?.GetValueOrDefault("en")).ToList() ?? new List<string>(),
-                ContentRating = m.Attributes?.ContentRating
+                ContentRating = m.Attributes?.ContentRating,
+                ContentType = m.Attributes?.OriginalLanguage switch
+                {
+                    "ja" => ContentType.Manga,
+                    "ko" => ContentType.Manhwa,
+                    "zh" => ContentType.Manhua,
+                    _ => ContentType.Other
+                }
             }).ToList();
         }
 
@@ -74,6 +82,13 @@ namespace NzbDrone.Core.Manga.Connectors
                 Demographic = m.Attributes?.PublicationDemographic,
                 Status = m.Attributes?.Status,
                 ContentRating = m.Attributes?.ContentRating,
+                ContentType = m.Attributes?.OriginalLanguage switch
+                {
+                    "ja" => ContentType.Manga,
+                    "ko" => ContentType.Manhwa,
+                    "zh" => ContentType.Manhua,
+                    _ => ContentType.Other
+                },
                 Year = m.Attributes?.Year ?? 0,
                 Genres = m.Attributes?.Tags?.Where(t => t.Attributes?.Group == "genre").Select(t => t.Attributes?.Name?.GetValueOrDefault("en")).ToList() ?? new List<string>(),
                 Tags = m.Attributes?.Tags?.Where(t => t.Attributes?.Group == "theme").Select(t => t.Attributes?.Name?.GetValueOrDefault("en")).ToList() ?? new List<string>(),

@@ -65,6 +65,7 @@ namespace NzbDrone.Core.Manga.Connectors
         public string CoverUrl { get; set; }
         public List<string> Genres { get; set; }
         public string ContentRating { get; set; }
+        public Books.ContentType ContentType { get; set; }
     }
 
     /// <summary>
