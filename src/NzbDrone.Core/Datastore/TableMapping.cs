@@ -214,6 +214,8 @@ namespace NzbDrone.Core.Datastore
             Mapper.Entity<StoryArc>("StoryArcs").RegisterModel()
                 .HasOne(a => a.MangaMetadata, a => a.MangaMetadataId);
 
+Mapper.Entity<MangaFile>("MangaFiles").RegisterModel();
+
             Mapper.Entity<OtherExtraFile>("ExtraFiles").RegisterModel();
 
             Mapper.Entity<PendingRelease>("PendingReleases").RegisterModel()
