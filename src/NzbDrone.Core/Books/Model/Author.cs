@@ -28,6 +28,7 @@ namespace NzbDrone.Core.Books
         public int QualityProfileId { get; set; }
         public int MetadataProfileId { get; set; }
         public HashSet<int> Tags { get; set; }
+        public ContentType ContentType { get; set; }
         [MemberwiseEqualityIgnore]
         public AddAuthorOptions AddOptions { get; set; }
 
@@ -81,6 +82,7 @@ namespace NzbDrone.Core.Books
             MetadataProfileId = other.MetadataProfileId;
             MetadataProfile = other.MetadataProfile;
             Tags = other.Tags;
+            ContentType = other.ContentType;
             AddOptions = other.AddOptions;
         }
 
@@ -98,6 +100,7 @@ namespace NzbDrone.Core.Books
             RootFolderPath = other.RootFolderPath;
             Monitored = other.Monitored;
             MonitorNewItems = other.MonitorNewItems;
+            ContentType = other.ContentType;
         }
     }
 }

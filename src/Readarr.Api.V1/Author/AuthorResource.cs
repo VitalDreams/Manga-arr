@@ -43,6 +43,7 @@ namespace Readarr.Api.V1.Author
         //Editing Only
         public bool Monitored { get; set; }
         public NewItemMonitorTypes MonitorNewItems { get; set; }
+        public ContentType ContentType { get; set; }
 
         public string RootFolderPath { get; set; }
         public string Folder { get; set; }
@@ -93,6 +94,7 @@ namespace Readarr.Api.V1.Author
 
                 Monitored = model.Monitored,
                 MonitorNewItems = model.MonitorNewItems,
+                ContentType = model.ContentType,
 
                 CleanName = model.CleanName,
                 ForeignAuthorId = model.Metadata.Value.ForeignAuthorId,
@@ -144,6 +146,7 @@ namespace Readarr.Api.V1.Author
 
                 Monitored = resource.Monitored,
                 MonitorNewItems = resource.MonitorNewItems,
+                ContentType = resource.ContentType,
 
                 CleanName = resource.CleanName,
                 RootFolderPath = resource.RootFolderPath,
