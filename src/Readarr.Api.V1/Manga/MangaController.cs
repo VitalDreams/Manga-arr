@@ -13,6 +13,7 @@ using NzbDrone.Core.MediaCover;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Manga;
 using NzbDrone.Core.Manga.Connectors;
+using NLog;
 using NzbDrone.Http.REST.Attributes;
 using NzbDrone.SignalR;
 using Readarr.Api.V1.Books;
@@ -30,6 +31,7 @@ namespace Readarr.Api.V1.Manga
         private readonly IMangaMetadataConnector _metadataConnector;
         private readonly IMapCoversToLocal _coverMapper;
         private readonly IHttpClient _httpClient;
+        private readonly Logger _logger;
 
         public MangaController(
             IAuthorService authorService,
@@ -38,7 +40,8 @@ namespace Readarr.Api.V1.Manga
             IMangaMetadataConnector metadataConnector,
             IMapCoversToLocal coverMapper,
             IHttpClient httpClient,
-            IBroadcastSignalRMessage signalRBroadcaster)
+            IBroadcastSignalRMessage signalRBroadcaster,
+            Logger logger)
             : base(signalRBroadcaster)
         {
             _authorService = authorService;
@@ -47,6 +50,7 @@ namespace Readarr.Api.V1.Manga
             _metadataConnector = metadataConnector;
             _coverMapper = coverMapper;
             _httpClient = httpClient;
+            _logger = logger;
 
             SharedValidator.RuleFor(s => s.Title).NotEmpty();
             SharedValidator.RuleFor(s => s.Path).NotEmpty();
@@ -312,7 +316,7 @@ namespace Readarr.Api.V1.Manga
             }
             catch (Exception ex)
             {
-                // Log but don't fail the add operation
+                _logger.Error(ex, "Failed to fetch and store volumes for manga {0} (ForeignMangaId: {1})", author.Name, foreignMangaId);
             }
         }
 
