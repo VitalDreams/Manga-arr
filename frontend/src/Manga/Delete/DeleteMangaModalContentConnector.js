@@ -9,9 +9,11 @@ import DeleteMangaModalContent from './DeleteMangaModalContent';
 function createMapStateToProps() {
   return createSelector(
     (state, { mangaId }) => _.find(state.manga.items, { id: mangaId }),
-    (manga) => {
+    (state) => state.manga,
+    (manga, mangaState) => {
       return {
-        mangaTitle: manga ? manga.title : ''
+        mangaTitle: manga ? manga.title : '',
+        isDeleting: mangaState.isDeleting || false
       };
     }
   );
