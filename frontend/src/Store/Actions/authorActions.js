@@ -5,13 +5,45 @@ import { filterTypePredicates, filterTypes, sortDirections } from 'Helpers/Props
 import { createThunk, handleThunks } from 'Store/thunks';
 import createAjaxRequest from 'Utilities/createAjaxRequest';
 import dateFilterPredicate from 'Utilities/Date/dateFilterPredicate';
-import { set, updateItem } from './baseActions';
+import getProxiedCoverUrl from 'Utilities/Manga/getProxiedCoverUrl';
+import { set, update, updateItem } from './baseActions';
 import { fetchBooks } from './bookActions';
-import createFetchHandler from './Creators/createFetchHandler';
 import createHandleActions from './Creators/createHandleActions';
 import createRemoveItemHandler from './Creators/createRemoveItemHandler';
 import createSaveProviderHandler from './Creators/createSaveProviderHandler';
 import createSetSettingValueReducer from './Creators/Reducers/createSetSettingValueReducer';
+
+//
+// Helpers
+
+function transformMangaToAuthorShape(manga) {
+  const coverUrl = getProxiedCoverUrl(manga.coverUrl);
+
+  return {
+    ...manga,
+    authorName: manga.title,
+    authorNameLastFirst: manga.title,
+    sortName: manga.sortName || manga.title,
+    sortNameLastFirst: manga.sortName || manga.title,
+    foreignAuthorId: manga.foreignMangaId,
+    images: coverUrl ? [{ coverType: 'poster', url: coverUrl }] : [],
+    statistics: manga.statistics || {
+      bookCount: 0,
+      bookFileCount: 0,
+      totalBookCount: 0,
+      availableBookCount: 0,
+      sizeOnDisk: 0
+    },
+    ratings: manga.ratings || { value: 0 }
+  };
+}
+
+function transformMangaResponse(data) {
+  if (Array.isArray(data)) {
+    return data.map(transformMangaToAuthorShape);
+  }
+  return transformMangaToAuthorShape(data);
+}
 
 //
 // Variables
@@ -273,9 +305,48 @@ function getSaveAjaxOptions({ ajaxOptions, payload }) {
 
 export const actionHandlers = handleThunks({
 
-  [FETCH_AUTHOR]: createFetchHandler(section, '/author'),
-  [SAVE_AUTHOR]: createSaveProviderHandler(section, '/author', { getAjaxOptions: getSaveAjaxOptions }),
-  [DELETE_AUTHOR]: createRemoveItemHandler(section, '/author'),
+  [FETCH_AUTHOR]: function(getState, payload, dispatch) {
+    dispatch(set({ section, isFetching: true }));
+
+    const {
+      id,
+      ...otherPayload
+    } = payload;
+
+    const { request, abortRequest } = createAjaxRequest({
+      url: id == null ? '/manga' : `/manga/${id}`,
+      data: otherPayload,
+      traditional: true
+    });
+
+    request.done((data) => {
+      const transformed = transformMangaResponse(data);
+      dispatch(batchActions([
+        id == null ? update({ section, data: transformed }) : updateItem({ section, ...transformed }),
+
+        set({
+          section,
+          isFetching: false,
+          isPopulated: true,
+          error: null
+        })
+      ]));
+    });
+
+    request.fail((xhr) => {
+      dispatch(set({
+        section,
+        isFetching: false,
+        isPopulated: false,
+        error: xhr.aborted ? null : xhr
+      }));
+    });
+
+    return abortRequest;
+  },
+
+  [SAVE_AUTHOR]: createSaveProviderHandler(section, '/manga', { getAjaxOptions: getSaveAjaxOptions }),
+  [DELETE_AUTHOR]: createRemoveItemHandler(section, '/manga'),
 
   [TOGGLE_AUTHOR_MONITORED]: (getState, payload, dispatch) => {
     const {
@@ -292,7 +363,7 @@ export const actionHandlers = handleThunks({
     }));
 
     const promise = createAjaxRequest({
-      url: `/author/${id}`,
+      url: `/manga/${id}`,
       method: 'PUT',
       data: JSON.stringify({
         ...author,
@@ -341,7 +412,7 @@ export const actionHandlers = handleThunks({
     season.monitored = monitored;
 
     const promise = createAjaxRequest({
-      url: `/author/${id}`,
+      url: `/manga/${id}`,
       method: 'PUT',
       data: JSON.stringify({
         ...author,
