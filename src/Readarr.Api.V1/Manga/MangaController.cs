@@ -102,8 +102,8 @@ namespace Readarr.Api.V1.Manga
             metadata.Artist = mangaResource.Artist;
             metadata.Status = mangaResource.Status;
             metadata.Demographic = mangaResource.Demographic;
-            metadata.Genres = mangaResource.Genres ?? new System.Collections.Generic.List<string>();
-            metadata.Tags = mangaResource.Tags ?? new System.Collections.Generic.List<string>();
+            metadata.Genres = mangaResource.Genres ?? new global::System.Collections.Generic.List<string>();
+            metadata.Tags = mangaResource.Tags ?? new global::System.Collections.Generic.List<string>();
             series.Metadata = metadata;
 
             _mangaService.AddSeries(series);
