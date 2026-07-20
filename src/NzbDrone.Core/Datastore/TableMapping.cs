@@ -191,7 +191,12 @@ namespace NzbDrone.Core.Datastore
 
             // Manga entities
             Mapper.Entity<MangaMetadata>("MangaMetadata").RegisterModel()
-                .Ignore(m => m.ContentType);
+                .Ignore(m => m.ContentType)
+                .Ignore(m => m.Genres)
+                .Ignore(m => m.Tags)
+                .Ignore(m => m.AlternateTitles)
+                .Ignore(m => m.Ratings)
+                .Ignore(m => m.Links);
 
             Mapper.Entity<MangaSeries>("MangaSeries").RegisterModel()
                 .Ignore(s => s.Name)
