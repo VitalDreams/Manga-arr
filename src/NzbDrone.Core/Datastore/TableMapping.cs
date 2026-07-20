@@ -190,7 +190,8 @@ namespace NzbDrone.Core.Datastore
             Mapper.Entity<MetadataFile>("MetadataFiles").RegisterModel();
 
             // Manga entities
-            Mapper.Entity<MangaMetadata>("MangaMetadata").RegisterModel();
+            Mapper.Entity<MangaMetadata>("MangaMetadata").RegisterModel()
+                .Ignore(m => m.ContentType);
 
             Mapper.Entity<MangaSeries>("MangaSeries").RegisterModel()
                 .Ignore(s => s.Name)
