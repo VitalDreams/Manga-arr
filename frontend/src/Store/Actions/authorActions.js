@@ -29,6 +29,8 @@ function transformMangaToAuthorShape(manga) {
     sortNameLastFirst: manga.sortName || manga.title,
     foreignAuthorId: manga.foreignMangaId,
     images: coverUrl ? [{ coverType: 'poster', url: coverUrl }] : [],
+    links: manga.links || [],
+    tags: manga.tags || [],
     statistics: manga.statistics || {
       bookCount: 0,
       bookFileCount: 0,
