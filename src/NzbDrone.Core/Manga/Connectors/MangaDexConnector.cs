@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Common.Http;
+using Newtonsoft.Json.Linq;
 using NzbDrone.Common.Serializer;
 using NzbDrone.Core.Books;
 
@@ -101,17 +102,33 @@ namespace NzbDrone.Core.Manga.Connectors
         public async Task<VolumeChapterMap> GetVolumeChapterMapAsync(string foreignMangaId)
         {
             var url = $"{MangaDexApiUrl}/manga/{foreignMangaId}/aggregate";
-            var response = await GetAsync<MangaDexAggregate>(url);
+            var content = await GetRawAsync(url);
+            var json = JObject.Parse(content);
 
             var volumeChapters = new Dictionary<int, List<string>>();
+            var volumesToken = json["volumes"];
 
-            if (response?.Volumes != null)
+            if (volumesToken is JObject volumesObj)
             {
-                foreach (var volume in response.Volumes)
+                foreach (var prop in volumesObj.Properties())
                 {
-                    if (int.TryParse(volume.Key, out var volumeNumber))
+                    if (int.TryParse(prop.Name, out var volumeNumber))
                     {
-                        var chapterIds = volume.Value.Chapters?.Select(c => c.Value.Id).ToList() ?? new List<string>();
+                        var chapterIds = new List<string>();
+                        var chaptersToken = prop.Value["chapters"];
+
+                        if (chaptersToken is JObject chaptersObj)
+                        {
+                            foreach (var chapterProp in chaptersObj.Properties())
+                            {
+                                var id = chapterProp.Value["id"]?.ToString();
+                                if (id != null)
+                                {
+                                    chapterIds.Add(id);
+                                }
+                            }
+                        }
+
                         volumeChapters[volumeNumber] = chapterIds;
                     }
                 }
@@ -187,6 +204,14 @@ namespace NzbDrone.Core.Manga.Connectors
             var response = await _httpClient.GetAsync(request);
             return Json.Deserialize<T>(response.Content);
         }
+
+        private async Task<string> GetRawAsync(string url)
+        {
+            await Task.Delay(RateLimitDelayMs); // Rate limiting
+            var request = new HttpRequestBuilder(url).Build();
+            var response = await _httpClient.GetAsync(request);
+            return response.Content;
+        }
     }
 
     // MangaDex API response models
@@ -258,23 +283,6 @@ namespace NzbDrone.Core.Manga.Connectors
         public string TranslatedLanguage { get; set; }
         public int Pages { get; set; }
         public DateTime? PublishAt { get; set; }
-    }
-
-    public class MangaDexAggregate
-    {
-        public Dictionary<string, MangaDexVolume> Volumes { get; set; }
-    }
-
-    public class MangaDexVolume
-    {
-        public string Volume { get; set; }
-        public Dictionary<string, MangaDexChapterRef> Chapters { get; set; }
-    }
-
-    public class MangaDexChapterRef
-    {
-        public string Id { get; set; }
-        public string Chapter { get; set; }
     }
 
     public class MangaDexAtHome
