@@ -334,9 +334,21 @@ export const actionHandlers = handleThunks({
   [FETCH_BOOKS]: function(getState, payload, dispatch) {
     dispatch(set({ section, isFetching: true }));
 
+    let url = '/book';
+    let data = payload;
+
+    if (payload && payload.authorId) {
+      const author = getState().authors.items.find((a) => a.id === payload.authorId);
+
+      if (author && author.foreignMangaId) {
+        url = `/manga/${payload.authorId}/books`;
+        data = undefined;
+      }
+    }
+
     const { request, abortRequest } = createAjaxRequest({
-      url: '/book',
-      data: payload,
+      url,
+      data,
       traditional: true
     });
 
