@@ -1,7 +1,5 @@
-import PropTypes from 'prop-types';
 import React, { useEffect, useCallback, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { createSelector } from 'reselect';
 import * as commandNames from 'Commands/commandNames';
 import { saveMangaEditor, setMangaFilter, setMangaSort, setMangaView } from 'Store/Actions/mangaIndexActions';
 import { executeCommand } from 'Store/Actions/commandActions';
