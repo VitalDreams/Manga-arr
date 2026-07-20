@@ -9,12 +9,40 @@ function createUnoptimizedSelector(uiSection) {
       const items = manga.items.map((m) => {
         const {
           id,
-          title
+          title,
+          titleSlug,
+          sortName,
+          monitored,
+          status,
+          images,
+          statistics,
+          year,
+          overview,
+          qualityProfileId,
+          metadataProfileId,
+          path,
+          foreignMangaId,
+          totalVolumes,
+          totalChapters
         } = m;
 
         return {
           id,
-          title
+          title,
+          titleSlug,
+          sortName,
+          monitored,
+          status,
+          images,
+          statistics,
+          year,
+          overview,
+          qualityProfileId,
+          metadataProfileId,
+          path,
+          foreignMangaId,
+          totalVolumes,
+          totalChapters
         };
       });
 
