@@ -110,13 +110,6 @@ function AppRoutes(props) {
       />
 
       {/*
-      */}
-
-      <Route
-
-      <Route
-
-      {/*
         Calendar
       */}
 
