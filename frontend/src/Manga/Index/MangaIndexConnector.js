@@ -1,6 +1,7 @@
 import React, { useEffect, useCallback, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import * as commandNames from 'Commands/commandNames';
+import { fetchManga } from 'Store/Actions/mangaActions';
 import { saveMangaEditor, setMangaFilter, setMangaSort, setMangaView } from 'Store/Actions/mangaIndexActions';
 import { executeCommand } from 'Store/Actions/commandActions';
 import createMangaClientSideCollectionItemsSelector from 'Store/Selectors/createMangaClientSideCollectionItemsSelector';
@@ -38,7 +39,8 @@ function MangaIndexConnector(props) {
 
   useEffect(() => {
     scrollRef.current = scrollPositions.mangaIndex || 0;
-  }, []);
+    dispatch(fetchManga());
+  }, [dispatch]);
 
   const onSortSelect = useCallback((newSortKey) => {
     dispatch(setMangaSort({ sortKey: newSortKey }));
