@@ -3,11 +3,11 @@ import _ from 'lodash';
 import PropTypes from 'prop-types';
 import React, { useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { createSelector } from 'reselect';
 import LoadingIndicator from 'Components/Loading/LoadingIndicator';
 import NotFound from 'Components/NotFound';
 import PageContent from 'Components/Page/PageContent';
 import PageContentBody from 'Components/Page/PageContentBody';
+import { fetchManga } from 'Store/Actions/mangaActions';
 import getErrorMessage from 'Utilities/Object/getErrorMessage';
 import translate from 'Utilities/String/translate';
 import MangaDetailsConnector from './MangaDetailsConnector';
@@ -29,6 +29,12 @@ function MangaDetailsPageConnector(props) {
   } = manga;
 
   const mangaIndex = _.findIndex(items, { titleSlug });
+
+  useEffect(() => {
+    if (!isPopulated && !isFetching) {
+      dispatch(fetchManga());
+    }
+  }, [isPopulated, isFetching, dispatch]);
 
   useEffect(() => {
     if (!titleSlug || (isPopulated && mangaIndex === -1)) {

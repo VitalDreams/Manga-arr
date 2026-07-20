@@ -53,12 +53,21 @@ namespace Readarr.Api.V1.Manga
             var series = _mangaService.GetSeries(id);
             var resource = series.ToResource();
 
-            // Include volumes in the response
+            // Include volumes in the response and compute statistics
             var volumes = _volumeRepository.All()
                 .Where(v => v.MangaMetadataId == series.MangaMetadataId)
                 .OrderBy(v => v.VolumeNumber)
                 .ToList();
             resource.Volumes = volumes.ToResource();
+
+            resource.Statistics = new MangaStatisticsResource
+            {
+                TotalVolumes = volumes.Count,
+                MonitoredVolumes = volumes.Count(v => v.Monitored),
+                DownloadedVolumes = volumes.Count(v => v.Monitored),
+                TotalChapters = 0,
+                DownloadedChapters = 0
+            };
 
             return resource;
         }
@@ -70,15 +79,25 @@ namespace Readarr.Api.V1.Manga
             var allSeries = _mangaService.GetAllSeries();
             var resources = allSeries.ToResource();
 
-            // Include volumes for each series
+            // Include volumes for each series and compute statistics
             var allVolumes = _volumeRepository.All().ToList();
             foreach (var resource in resources)
             {
-                resource.Volumes = allVolumes
+                var mangaVolumes = allVolumes
                     .Where(v => v.MangaMetadataId == resource.MangaMetadataId)
                     .OrderBy(v => v.VolumeNumber)
-                    .ToList()
-                    .ToResource();
+                    .ToList();
+
+                resource.Volumes = mangaVolumes.ToResource();
+
+                resource.Statistics = new MangaStatisticsResource
+                {
+                    TotalVolumes = mangaVolumes.Count,
+                    MonitoredVolumes = mangaVolumes.Count(v => v.Monitored),
+                    DownloadedVolumes = mangaVolumes.Count(v => v.Monitored),
+                    TotalChapters = 0,
+                    DownloadedChapters = 0
+                };
             }
 
             return resources;
