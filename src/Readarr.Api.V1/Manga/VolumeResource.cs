@@ -8,6 +8,7 @@ namespace Readarr.Api.V1.Manga
 {
     public class VolumeResource : RestResource
     {
+        public int AuthorId { get; set; }
         public int MangaSeriesId { get; set; }
         public int MangaMetadataId { get; set; }
         public string ForeignVolumeId { get; set; }
