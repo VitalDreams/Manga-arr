@@ -48,6 +48,7 @@ function MangaIndex(props) {
   const [jumpBarItems, setJumpBarItems] = useState({ order: [] });
 
   const registerScroller = useCallback((ref) => {
+    console.log("registerScroller called", ref);
     setScroller(ref);
   }, []);
 
