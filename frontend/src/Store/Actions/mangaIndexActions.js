@@ -1,6 +1,7 @@
 import { createAction } from 'redux-actions';
 import { filterBuilderTypes, filterBuilderValueTypes, sortDirections } from 'Helpers/Props';
 import { createThunk, handleThunks } from 'Store/thunks';
+import createAjaxRequest from 'Utilities/createAjaxRequest';
 import { filterPredicates, filters, sortPredicates } from './mangaActions';
 import { set, updateItem } from './baseActions';
 import createHandleActions from './Creators/createHandleActions';

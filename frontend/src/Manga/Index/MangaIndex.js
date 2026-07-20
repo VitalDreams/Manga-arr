@@ -1,6 +1,6 @@
 import _ from 'lodash';
 import PropTypes from 'prop-types';
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import LoadingIndicator from 'Components/Loading/LoadingIndicator';
 import PageContent from 'Components/Page/PageContent';
 import PageContentBody from 'Components/Page/PageContentBody';
@@ -11,7 +11,6 @@ import PageToolbarSection from 'Components/Page/Toolbar/PageToolbarSection';
 import PageToolbarSeparator from 'Components/Page/Toolbar/PageToolbarSeparator';
 import { align, icons, sortDirections } from 'Helpers/Props';
 import getErrorMessage from 'Utilities/Object/getErrorMessage';
-import hasDifferentItemsOrOrder from 'Utilities/Object/hasDifferentItemsOrOrder';
 import translate from 'Utilities/String/translate';
 import getSelectedIds from 'Utilities/Table/getSelectedIds';
 import selectAll from 'Utilities/Table/selectAll';
@@ -35,20 +34,23 @@ function MangaIndex(props) {
     isRefreshingManga,
     isRssSyncExecuting,
     totalItems,
-    onSortSelect,
-    onFilterSelect,
-    onViewSelect,
     onRefreshMangaPress,
-    onRssSyncPress
+    onRssSyncPress,
+    onScroll,
+    onSaveSelected
   } = props;
 
-  const scrollerRef = useRef(null);
+  const [scroller, setScroller] = useState(null);
   const [isEditorActive, setIsEditorActive] = useState(false);
   const [allSelected, setAllSelected] = useState(false);
   const [allUnselected, setAllUnselected] = useState(false);
   const [lastToggled, setLastToggled] = useState(null);
   const [selectedState, setSelectedState] = useState({});
   const [jumpBarItems, setJumpBarItems] = useState({ order: [] });
+
+  const registerScroller = useCallback((ref) => {
+    setScroller(ref);
+  }, []);
 
   useEffect(() => {
     if (sortKey === 'title') {
@@ -86,16 +88,12 @@ function MangaIndex(props) {
     setLastToggled(result.lastToggled);
   }, [selectedState, items, lastToggled]);
 
-  const onJumpToCharacterPress = useCallback((character) => {
-    // JumpToCharacter is handled by the posters component
-  }, []);
-
-  const onSaveSelected = useCallback(() => {
+  const handleSaveSelected = useCallback(() => {
     const selectedIds = getSelectedIds(selectedState);
-    if (selectedIds.length && props.onSaveSelected) {
-      props.onSaveSelected({ ids: selectedIds });
+    if (selectedIds.length) {
+      onSaveSelected({ ids: selectedIds });
     }
-  }, [selectedState, props]);
+  }, [selectedState, onSaveSelected]);
 
   if (isFetching && !isPopulated) {
     return (
@@ -130,6 +128,7 @@ function MangaIndex(props) {
   }
 
   const hasSelection = getSelectedIds(selectedState).length > 0;
+  const isLoaded = isPopulated && !isFetching;
 
   return (
     <PageContent title={translate('Manga')}>
@@ -157,7 +156,7 @@ function MangaIndex(props) {
             label={isEditorActive ? 'Save' : 'Editor'}
             iconName={isEditorActive ? icons.SAVE : icons.EDIT}
             isDisabled={isEditorActive && !hasSelection}
-            onPress={isEditorActive ? onSaveSelected : onEditorPress}
+            onPress={isEditorActive ? handleSaveSelected : onEditorPress}
           />
 
           {
@@ -171,37 +170,45 @@ function MangaIndex(props) {
         </PageToolbarSection>
       </PageToolbar>
 
-      <PageContentBody
-        ref={scrollerRef}
-        className={styles.contentBody}
-      >
-        <div className={styles.postersInnerContentBody}>
+      <div className={styles.pageContentBodyWrapper}>
+        <PageContentBody
+          registerScroller={registerScroller}
+          className={styles.contentBody}
+          innerClassName={styles.postersInnerContentBody}
+          onScroll={onScroll}
+        >
           {
-            view === 'posters' &&
-              <MangaIndexPosters
-                items={items}
-                sortKey={sortKey}
-                posterOptions={posterOptions}
-                jumpToCharacter={jumpToCharacter}
-                scrollTop={0}
-                scroller={scrollerRef.current}
-                isSmallScreen={isSmallScreen}
-                selectedState={selectedState}
-                onSelectedChange={onSelectedChange}
-                isEditorActive={isEditorActive}
-              />
+            isLoaded &&
+              <div className={styles.contentBodyContainer}>
+                <MangaIndexPosters
+                  items={items}
+                  sortKey={sortKey}
+                  posterOptions={posterOptions}
+                  jumpToCharacter={jumpToCharacter}
+                  scrollTop={0}
+                  scroller={scroller}
+                  isSmallScreen={isSmallScreen}
+                  selectedState={selectedState}
+                  onSelectedChange={onSelectedChange}
+                  isEditorActive={isEditorActive}
+                />
+              </div>
           }
-        </div>
+
+          {
+            !error && isPopulated && !items.length &&
+              <NoManga totalItems={totalItems} />
+          }
+        </PageContentBody>
 
         {
-          jumpBarItems.order.length > 0 &&
+          isLoaded && !!jumpBarItems.order.length &&
             <PageJumpBar
               items={jumpBarItems}
               jumpToCharacter={jumpToCharacter}
-              onPress={onJumpToCharacterPress}
             />
         }
-      </PageContentBody>
+      </div>
     </PageContent>
   );
 }
@@ -220,11 +227,9 @@ MangaIndex.propTypes = {
   isRefreshingManga: PropTypes.bool.isRequired,
   isRssSyncExecuting: PropTypes.bool.isRequired,
   totalItems: PropTypes.number.isRequired,
-  onSortSelect: PropTypes.func.isRequired,
-  onFilterSelect: PropTypes.func.isRequired,
-  onViewSelect: PropTypes.func.isRequired,
   onRefreshMangaPress: PropTypes.func.isRequired,
   onRssSyncPress: PropTypes.func.isRequired,
+  onScroll: PropTypes.func.isRequired,
   onSaveSelected: PropTypes.func.isRequired
 };
 
