@@ -306,6 +306,7 @@ namespace Readarr.Api.V1.Manga
                         new Edition
                         {
                             Title = book.Title,
+                            TitleSlug = book.TitleSlug,
                             ForeignEditionId = book.ForeignBookId,
                             Monitored = true
                         }
