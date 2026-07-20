@@ -22,7 +22,8 @@ namespace NzbDrone.Core.Manga
             // Register Prowlarr connector (fallback download source)
             container.Register<IProwlarrConnector, ProwlarrConnector>(Reuse.Singleton);
 
-            // Register manga series repository and service
+            // Register manga metadata and series repositories and service
+            container.Register<IMangaMetadataRepository, MangaMetadataRepository>(Reuse.Singleton);
             container.Register<IMangaSeriesRepository, MangaSeriesRepository>(Reuse.Singleton);
             container.Register<IMangaSeriesService, MangaSeriesService>(Reuse.Singleton);
 

@@ -88,6 +88,24 @@ namespace Readarr.Api.V1.Manga
         {
             var series = mangaResource.ToModel();
             series.CleanName = (mangaResource.Title ?? string.Empty).ToLowerInvariant().Replace(" ", string.Empty);
+
+            // Populate MangaMetadata from the resource so AddSeries can persist it
+            var metadata = series.Metadata?.Value ?? new NzbDrone.Core.Manga.MangaMetadata();
+            metadata.ForeignMangaId = mangaResource.ForeignMangaId;
+            metadata.Title = mangaResource.Title;
+            metadata.CoverUrl = mangaResource.CoverUrl;
+            metadata.Year = mangaResource.Year;
+            metadata.TotalVolumes = mangaResource.TotalVolumes;
+            metadata.TotalChapters = mangaResource.TotalChapters;
+            metadata.Description = mangaResource.Overview;
+            metadata.Author = mangaResource.Author;
+            metadata.Artist = mangaResource.Artist;
+            metadata.Status = mangaResource.Status;
+            metadata.Demographic = mangaResource.Demographic;
+            metadata.Genres = mangaResource.Genres ?? new System.Collections.Generic.List<string>();
+            metadata.Tags = mangaResource.Tags ?? new System.Collections.Generic.List<string>();
+            series.Metadata = metadata;
+
             _mangaService.AddSeries(series);
 
             // Fetch volumes and chapters from MangaDex
@@ -123,6 +141,22 @@ namespace Readarr.Api.V1.Manga
             var model = mangaResource.ToModel();
             model.Id = existing.Id;
             model.Added = existing.Added;
+            model.MangaMetadataId = existing.MangaMetadataId;
+
+            // Propagate metadata changes
+            var metadata = existing.Metadata?.Value ?? new NzbDrone.Core.Manga.MangaMetadata();
+            metadata.Title = mangaResource.Title;
+            metadata.CoverUrl = mangaResource.CoverUrl;
+            metadata.Year = mangaResource.Year;
+            metadata.TotalVolumes = mangaResource.TotalVolumes;
+            metadata.TotalChapters = mangaResource.TotalChapters;
+            metadata.Description = mangaResource.Overview;
+            metadata.Author = mangaResource.Author;
+            metadata.Artist = mangaResource.Artist;
+            metadata.Status = mangaResource.Status;
+            metadata.Demographic = mangaResource.Demographic;
+            model.Metadata = metadata;
+
             _mangaService.UpdateSeries(model);
             BroadcastResourceChange(ModelAction.Updated, mangaResource);
             return Accepted(mangaResource.Id);

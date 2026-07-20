@@ -20,6 +20,7 @@ namespace NzbDrone.Core.Manga
     public class MangaSeriesService : IMangaSeriesService
     {
         private readonly IMangaSeriesRepository _seriesRepository;
+        private readonly IMangaMetadataRepository _metadataRepository;
         private readonly IVolumeRepository _volumeRepository;
         private readonly IChapterRepository _chapterRepository;
         private readonly IMangaMetadataConnector _metadataConnector;
@@ -29,6 +30,7 @@ namespace NzbDrone.Core.Manga
 
         public MangaSeriesService(
             IMangaSeriesRepository seriesRepository,
+            IMangaMetadataRepository metadataRepository,
             IVolumeRepository volumeRepository,
             IChapterRepository chapterRepository,
             IMangaMetadataConnector metadataConnector,
@@ -37,6 +39,7 @@ namespace NzbDrone.Core.Manga
             Logger logger)
         {
             _seriesRepository = seriesRepository;
+            _metadataRepository = metadataRepository;
             _volumeRepository = volumeRepository;
             _chapterRepository = chapterRepository;
             _metadataConnector = metadataConnector;
@@ -62,6 +65,15 @@ namespace NzbDrone.Core.Manga
                 newSeries.CleanName = (newSeries.Name ?? string.Empty).ToLowerInvariant().Replace(" ", string.Empty);
             }
 
+            // Persist the MangaMetadata record first so we get a valid Id
+            var metadata = newSeries.Metadata?.Value;
+            if (metadata != null && !string.IsNullOrEmpty(metadata.ForeignMangaId))
+            {
+                metadata = _metadataRepository.Insert(metadata);
+                newSeries.MangaMetadataId = metadata.Id;
+                newSeries.Metadata = metadata;
+            }
+
             var series = _seriesRepository.Insert(newSeries);
             _eventAggregator.PublishEvent(new MangaSeriesAddedEvent(series));
 
@@ -72,6 +84,19 @@ namespace NzbDrone.Core.Manga
 
         public MangaSeries UpdateSeries(MangaSeries series)
         {
+            // Update the MangaMetadata record if present
+            var metadata = series.Metadata?.Value;
+            if (metadata != null && metadata.Id > 0)
+            {
+                _metadataRepository.Update(metadata);
+            }
+            else if (metadata != null && !string.IsNullOrEmpty(metadata.ForeignMangaId))
+            {
+                metadata = _metadataRepository.Insert(metadata);
+                series.MangaMetadataId = metadata.Id;
+                series.Metadata = metadata;
+            }
+
             var updated = _seriesRepository.Update(series);
             _eventAggregator.PublishEvent(new MangaSeriesUpdatedEvent(updated));
 
