@@ -58,17 +58,6 @@ namespace Readarr.Api.V1.Manga
         public int DownloadedChapters { get; set; }
     }
 
-    public class VolumeResource
-    {
-        public int Id { get; set; }
-        public int AuthorId { get; set; }
-        public string ForeignVolumeId { get; set; }
-        public string Title { get; set; }
-        public DateTime? ReleaseDate { get; set; }
-        public bool Monitored { get; set; }
-        public DateTime Added { get; set; }
-    }
-
     public static class MangaResourceMapper
     {
         // Prefix for structured manga metadata stored in Overview

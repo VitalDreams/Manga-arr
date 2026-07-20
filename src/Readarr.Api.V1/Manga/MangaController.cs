@@ -10,6 +10,7 @@ using NzbDrone.Core.Books;
 using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.MediaCover;
 using NzbDrone.Core.Messaging.Events;
+using NzbDrone.Core.Manga;
 using NzbDrone.Core.Manga.Connectors;
 using NzbDrone.Http.REST.Attributes;
 using NzbDrone.SignalR;
