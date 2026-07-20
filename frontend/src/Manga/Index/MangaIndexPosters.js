@@ -189,7 +189,7 @@ function MangaIndexPosters(props) {
       onMeasure={onMeasure}
     >
       <WindowScroller
-        scrollElement={isSmallScreen ? undefined : scroller}
+        scrollElement={typeof window !== "undefined" ? window : undefined}
       >
         {({ height, registerChild, onChildScroll, scrollTop }) => {
           if (!height) {
