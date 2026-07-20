@@ -6,7 +6,6 @@ import getNewAuthor from 'Utilities/Author/getNewAuthor';
 import monitorNewItemsOptions from 'Utilities/Author/monitorNewItemsOptions';
 import monitorOptions from 'Utilities/Author/monitorOptions';
 import getNewBook from 'Utilities/Book/getNewBook';
-import getNewManga from 'Utilities/Manga/getNewManga';
 import createAjaxRequest from 'Utilities/createAjaxRequest';
 import getSectionState from 'Utilities/State/getSectionState';
 import updateSectionState from 'Utilities/State/updateSectionState';
@@ -220,7 +219,28 @@ export const actionHandlers = handleThunks({
     const foreignMangaId = payload.foreignMangaId;
     const items = getState().search.items;
     const itemToAdd = _.find(items, { foreignMangaId });
-    const newManga = getNewManga(_.cloneDeep(itemToAdd), payload);
+    const clonedItem = _.cloneDeep(itemToAdd);
+    const newManga = {
+      foreignMangaId: clonedItem.foreignMangaId,
+      title: clonedItem.title,
+      titleSlug: clonedItem.title,
+      overview: clonedItem.overview || '',
+      author: clonedItem.author || '',
+      artist: '',
+      status: clonedItem.status || '',
+      demographic: '',
+      year: clonedItem.year || 0,
+      totalVolumes: 0,
+      totalChapters: 0,
+      genres: [],
+      tags: [],
+      coverUrl: clonedItem.coverUrl || '',
+      rootFolderPath: payload.rootFolderPath,
+      qualityProfileId: payload.qualityProfileId,
+      metadataProfileId: payload.metadataProfileId,
+      monitored: true,
+      tagIds: payload.tags || []
+    };
 
     const promise = createAjaxRequest({
       url: '/manga',

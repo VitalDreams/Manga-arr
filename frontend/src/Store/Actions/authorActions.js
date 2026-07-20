@@ -5,7 +5,6 @@ import { filterTypePredicates, filterTypes, sortDirections } from 'Helpers/Props
 import { createThunk, handleThunks } from 'Store/thunks';
 import createAjaxRequest from 'Utilities/createAjaxRequest';
 import dateFilterPredicate from 'Utilities/Date/dateFilterPredicate';
-import getProxiedCoverUrl from 'Utilities/Manga/getProxiedCoverUrl';
 import { set, update, updateItem } from './baseActions';
 import { fetchBooks } from './bookActions';
 import createHandleActions from './Creators/createHandleActions';
@@ -17,7 +16,10 @@ import createSetSettingValueReducer from './Creators/Reducers/createSetSettingVa
 // Helpers
 
 function transformMangaToAuthorShape(manga) {
-  const coverUrl = getProxiedCoverUrl(manga.coverUrl);
+  const rawCoverUrl = manga.coverUrl;
+  const coverUrl = (rawCoverUrl && rawCoverUrl.startsWith('https://uploads.mangadex.org/'))
+    ? `/api/v1/manga/cover?url=${encodeURIComponent(rawCoverUrl)}`
+    : rawCoverUrl;
 
   return {
     ...manga,

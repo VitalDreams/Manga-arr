@@ -9,9 +9,7 @@ import PageContent from 'Components/Page/PageContent';
 import PageContentBody from 'Components/Page/PageContentBody';
 import { icons, kinds } from 'Helpers/Props';
 import getErrorMessage from 'Utilities/Object/getErrorMessage';
-import getProxiedCoverUrl from 'Utilities/Manga/getProxiedCoverUrl';
 import translate from 'Utilities/String/translate';
-import AddNewMangaModal from './Manga/AddNewMangaModal';
 import styles from './AddNewItem.css';
 
 class AddNewItem extends Component {
@@ -24,9 +22,7 @@ class AddNewItem extends Component {
 
     this.state = {
       term: props.term || '',
-      isFetching: false,
-      isAddMangaModalOpen: false,
-      selectedManga: null
+      isFetching: false
     };
   }
 
@@ -77,20 +73,6 @@ class AddNewItem extends Component {
     this.props.onClearSearch();
   };
 
-  onMangaResultPress = (item) => {
-    this.setState({
-      isAddMangaModalOpen: true,
-      selectedManga: item
-    });
-  };
-
-  onAddMangaModalClose = () => {
-    this.setState({
-      isAddMangaModalOpen: false,
-      selectedManga: null
-    });
-  };
-
   //
   // Render
 
@@ -103,9 +85,7 @@ class AddNewItem extends Component {
 
     const {
       term,
-      isFetching,
-      isAddMangaModalOpen,
-      selectedManga
+      isFetching
     } = this.state;
 
     return (
@@ -172,7 +152,7 @@ class AddNewItem extends Component {
                           item.coverUrl ?
                             <img
                               className={styles.mangaCover}
-                              src={getProxiedCoverUrl(item.coverUrl)}
+                              src={item.coverUrl && item.coverUrl.startsWith('https://uploads.mangadex.org/') ? `/api/v1/manga/cover?url=${encodeURIComponent(item.coverUrl)}` : item.coverUrl}
                             /> :
                             null
                         }
@@ -261,19 +241,6 @@ class AddNewItem extends Component {
           }
 
           <div />
-
-          {
-            selectedManga &&
-              <AddNewMangaModal
-                isOpen={isAddMangaModalOpen}
-                foreignMangaId={selectedManga.foreignMangaId}
-                title={selectedManga.title}
-                author={selectedManga.author}
-                coverUrl={selectedManga.coverUrl}
-                overview={selectedManga.overview}
-                onModalClose={this.onAddMangaModalClose}
-              />
-          }
         </PageContentBody>
       </PageContent>
     );

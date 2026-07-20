@@ -7,7 +7,6 @@ import ModalContent from 'Components/Modal/ModalContent';
 import ModalFooter from 'Components/Modal/ModalFooter';
 import ModalHeader from 'Components/Modal/ModalHeader';
 import { kinds } from 'Helpers/Props';
-import getProxiedCoverUrl from 'Utilities/Manga/getProxiedCoverUrl';
 import translate from 'Utilities/String/translate';
 import AddAuthorOptionsForm from '../Common/AddAuthorOptionsForm.js';
 import styles from './AddNewMangaModalContent.css';
@@ -44,7 +43,7 @@ class AddNewMangaModalContent extends Component {
                 <div className={styles.poster}>
                   <img
                     className={styles.posterImage}
-                    src={getProxiedCoverUrl(coverUrl)}
+                    src={coverUrl && coverUrl.startsWith('https://uploads.mangadex.org/') ? `/api/v1/manga/cover?url=${encodeURIComponent(coverUrl)}` : coverUrl}
                   />
                 </div>
             }
