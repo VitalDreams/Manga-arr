@@ -6,7 +6,6 @@ import { connect } from 'react-redux';
 import { createSelector } from 'reselect';
 import * as commandNames from 'Commands/commandNames';
 import { toggleAuthorMonitored } from 'Store/Actions/authorActions';
-import { clearBookFiles, fetchBookFiles } from 'Store/Actions/bookFileActions';
 import { saveBookEditor } from 'Store/Actions/bookIndexActions';
 import { executeCommand } from 'Store/Actions/commandActions';
 import { clearQueueDetails, fetchQueueDetails } from 'Store/Actions/queueActions';
@@ -81,19 +80,16 @@ const selectSeries = createSelector(
 const selectBookFiles = createSelector(
   (state) => state.bookFiles,
   (bookFiles) => {
-    const {
-      items,
-      isFetching,
-      isPopulated,
-      error
-    } = bookFiles;
+    const { items } = bookFiles;
 
     const hasBookFiles = !!items.length;
 
+    // Manga volumes don't use traditional book files — they're served
+    // through the series endpoint. Always report as populated with no error.
     return {
-      isBookFilesFetching: isFetching,
-      isBookFilesPopulated: isPopulated,
-      bookFilesError: error,
+      isBookFilesFetching: false,
+      isBookFilesPopulated: true,
+      bookFilesError: null,
       hasBookFiles
     };
   }
@@ -208,8 +204,6 @@ const mapDispatchToProps = {
   fetchSeries,
   clearSeries,
   saveBookEditor,
-  fetchBookFiles,
-  clearBookFiles,
   toggleAuthorMonitored,
   fetchQueueDetails,
   clearQueueDetails,
@@ -267,14 +261,12 @@ class AuthorDetailsConnector extends Component {
     const authorId = this.props.id;
 
     this.props.fetchSeries({ authorId });
-    this.props.fetchBookFiles({ authorId });
     this.props.fetchQueueDetails({ authorId });
   };
 
   unpopulate = () => {
     this.props.cancelFetchReleases();
     this.props.clearSeries();
-    this.props.clearBookFiles();
     this.props.clearQueueDetails();
     this.props.clearReleases();
   };
@@ -334,8 +326,6 @@ AuthorDetailsConnector.propTypes = {
   fetchSeries: PropTypes.func.isRequired,
   clearSeries: PropTypes.func.isRequired,
   saveBookEditor: PropTypes.func.isRequired,
-  fetchBookFiles: PropTypes.func.isRequired,
-  clearBookFiles: PropTypes.func.isRequired,
   toggleAuthorMonitored: PropTypes.func.isRequired,
   fetchQueueDetails: PropTypes.func.isRequired,
   clearQueueDetails: PropTypes.func.isRequired,
