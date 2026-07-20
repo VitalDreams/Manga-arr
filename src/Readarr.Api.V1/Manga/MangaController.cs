@@ -7,11 +7,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Common.Http;
 using NzbDrone.Core.Datastore.Events;
+using NzbDrone.Core.Books;
 using NzbDrone.Core.Manga;
 using NzbDrone.Core.MediaCover;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Http.REST.Attributes;
 using NzbDrone.SignalR;
+using Readarr.Api.V1.Books;
 using Readarr.Http;
 using Readarr.Http.REST;
 
@@ -218,6 +220,39 @@ namespace Readarr.Api.V1.Manga
 
             var result = await _searchService.SearchAndDownloadAsync(id, volumeId);
             return Ok(result);
+        }
+
+        [HttpGet("{id}/books")]
+        public List<BookResource> GetMangaBooks(int id)
+        {
+            var series = _mangaService.GetSeries(id);
+            if (series == null)
+            {
+                return new List<BookResource>();
+            }
+
+            var volumes = _volumeRepository.All()
+                .Where(v => v.MangaSeriesId == id)
+                .OrderBy(v => v.VolumeNumber)
+                .ToList();
+
+            return volumes.Select(v => new BookResource
+            {
+                Id = v.Id,
+                Title = v.Title ?? $"Volume {v.VolumeNumber}",
+                AuthorId = v.MangaSeriesId,
+                ForeignBookId = v.ForeignVolumeId,
+                TitleSlug = v.TitleSlug,
+                Monitored = v.Monitored,
+                AnyEditionOk = v.AnyEditionOk,
+                ReleaseDate = v.ReleaseDate,
+                PageCount = v.Chapters?.Value?.Count ?? 0,
+                Genres = v.Genres,
+                Ratings = v.Ratings ?? new Ratings(),
+                Added = v.Added,
+                SeriesTitle = $"Volume {v.VolumeNumber}",
+                LastSearchTime = v.LastSearchTime
+            }).ToList();
         }
     }
 }
