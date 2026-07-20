@@ -290,7 +290,7 @@ namespace Readarr.Api.V1.Manga
                     {
                         ForeignBookId = $"{foreignMangaId}_vol{volumeNumber}",
                         Title = $"Volume {volumeNumber}",
-                        TitleSlug = $"volume-{volumeNumber}",
+                        TitleSlug = $"{foreignMangaId}-vol{volumeNumber}",
                         CleanTitle = $"volume {volumeNumber}",
                         Monitored = true,
                         AnyEditionOk = true,
