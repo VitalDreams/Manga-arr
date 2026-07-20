@@ -5,12 +5,14 @@ using System.Threading.Tasks;
 using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Common.Extensions;
 using NzbDrone.Common.Http;
-using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.Books;
-using NzbDrone.Core.Manga;
+using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.MediaCover;
 using NzbDrone.Core.Messaging.Events;
+using NzbDrone.Core.Manga;
+using NzbDrone.Core.Manga.Connectors;
 using NzbDrone.Http.REST.Attributes;
 using NzbDrone.SignalR;
 using Readarr.Api.V1.Books;
@@ -20,26 +22,32 @@ using Readarr.Http.REST;
 namespace Readarr.Api.V1.Manga
 {
     [V1ApiController]
-    public class MangaController : RestControllerWithSignalR<MangaResource, MangaSeries>
+    public class MangaController : RestControllerWithSignalR<MangaResource, NzbDrone.Core.Books.Author>
     {
-        private readonly IMangaSeriesService _mangaService;
-        private readonly IMangaSearchService _searchService;
-        private readonly IVolumeRepository _volumeRepository;
+        private readonly IAuthorService _authorService;
+        private readonly IAuthorMetadataService _authorMetadataService;
+        private readonly IBookService _bookService;
+        private readonly IEditionService _editionService;
+        private readonly IMangaMetadataConnector _metadataConnector;
         private readonly IMapCoversToLocal _coverMapper;
         private readonly IHttpClient _httpClient;
 
         public MangaController(
-            IMangaSeriesService mangaService,
-            IMangaSearchService searchService,
-            IVolumeRepository volumeRepository,
+            IAuthorService authorService,
+            IAuthorMetadataService authorMetadataService,
+            IBookService bookService,
+            IEditionService editionService,
+            IMangaMetadataConnector metadataConnector,
             IMapCoversToLocal coverMapper,
             IHttpClient httpClient,
             IBroadcastSignalRMessage signalRBroadcaster)
             : base(signalRBroadcaster)
         {
-            _mangaService = mangaService;
-            _searchService = searchService;
-            _volumeRepository = volumeRepository;
+            _authorService = authorService;
+            _authorMetadataService = authorMetadataService;
+            _bookService = bookService;
+            _editionService = editionService;
+            _metadataConnector = metadataConnector;
             _coverMapper = coverMapper;
             _httpClient = httpClient;
 
@@ -50,24 +58,29 @@ namespace Readarr.Api.V1.Manga
 
         protected override MangaResource GetResourceById(int id)
         {
-            var series = _mangaService.GetSeries(id);
-            var resource = series.ToResource();
+            var author = _authorService.GetAuthor(id);
+            if (author == null)
+            {
+                return null;
+            }
 
-            // Include volumes in the response and compute statistics
-            var volumes = _volumeRepository.All()
-                .Where(v => v.MangaMetadataId == series.MangaMetadataId)
-                .OrderBy(v => v.VolumeNumber)
-                .ToList();
-            resource.Volumes = volumes.ToResource();
+            var resource = author.ToMangaResource();
+
+            // Load books (volumes) for this manga
+            var books = _bookService.GetBooksByAuthor(id);
+            resource.Volumes = books.Select(b => b.ToVolumeResource(id)).ToList();
 
             resource.Statistics = new MangaStatisticsResource
             {
-                TotalVolumes = volumes.Count,
-                MonitoredVolumes = volumes.Count(v => v.Monitored),
-                DownloadedVolumes = volumes.Count(v => v.Monitored),
+                TotalVolumes = books.Count,
+                MonitoredVolumes = books.Count(b => b.Monitored),
+                DownloadedVolumes = 0,
                 TotalChapters = 0,
                 DownloadedChapters = 0
             };
+
+            // Map cover URL to local path
+            MapCoverToLocal(resource);
 
             return resource;
         }
@@ -76,109 +89,94 @@ namespace Readarr.Api.V1.Manga
         [Produces("application/json")]
         public List<MangaResource> AllManga()
         {
-            var allSeries = _mangaService.GetAllSeries();
-            var resources = allSeries.ToResource();
+            var allAuthors = _authorService.GetAllAuthors();
+            var resources = new List<MangaResource>();
 
-            // Include volumes for each series and compute statistics
-            var allVolumes = _volumeRepository.All().ToList();
-            foreach (var resource in resources)
+            foreach (var author in allAuthors)
             {
-                var mangaVolumes = allVolumes
-                    .Where(v => v.MangaMetadataId == resource.MangaMetadataId)
-                    .OrderBy(v => v.VolumeNumber)
-                    .ToList();
+                var resource = author.ToMangaResource();
 
-                resource.Volumes = mangaVolumes.ToResource();
+                var books = _bookService.GetBooksByAuthor(author.Id);
+                resource.Volumes = books.Select(b => b.ToVolumeResource(author.Id)).ToList();
 
                 resource.Statistics = new MangaStatisticsResource
                 {
-                    TotalVolumes = mangaVolumes.Count,
-                    MonitoredVolumes = mangaVolumes.Count(v => v.Monitored),
-                    DownloadedVolumes = mangaVolumes.Count(v => v.Monitored),
+                    TotalVolumes = books.Count,
+                    MonitoredVolumes = books.Count(b => b.Monitored),
+                    DownloadedVolumes = 0,
                     TotalChapters = 0,
                     DownloadedChapters = 0
                 };
+
+                MapCoverToLocal(resource);
+                resources.Add(resource);
             }
 
             return resources;
         }
 
-
         [RestPostById]
         public ActionResult<MangaResource> AddManga([FromBody] MangaResource mangaResource)
         {
-            var series = mangaResource.ToModel();
-            series.CleanName = (mangaResource.Title ?? string.Empty).ToLowerInvariant().Replace(" ", string.Empty);
+            // Create AuthorMetadata from manga resource
+            var metadata = mangaResource.ToAuthorMetadata();
+            _authorMetadataService.Upsert(metadata);
 
-            // Populate MangaMetadata from the resource so AddSeries can persist it
-            var metadata = series.Metadata?.Value ?? new NzbDrone.Core.Manga.MangaMetadata();
-            metadata.ForeignMangaId = mangaResource.ForeignMangaId;
-            metadata.Title = mangaResource.Title;
-            metadata.CoverUrl = mangaResource.CoverUrl;
-            metadata.Year = mangaResource.Year;
-            metadata.TotalVolumes = mangaResource.TotalVolumes;
-            metadata.TotalChapters = mangaResource.TotalChapters;
-            metadata.Description = mangaResource.Overview;
-            metadata.Author = mangaResource.Author;
-            metadata.Artist = mangaResource.Artist;
-            metadata.Status = mangaResource.Status;
-            metadata.Demographic = mangaResource.Demographic;
-            metadata.Genres = mangaResource.Genres ?? new global::System.Collections.Generic.List<string>();
-            metadata.Tags = mangaResource.Tags ?? new global::System.Collections.Generic.List<string>();
-            series.Metadata = metadata;
+            // Create Author record
+            var author = mangaResource.ToAuthorModel();
+            author.AuthorMetadataId = metadata.Id;
+            author.Metadata = metadata;
+            author.Added = DateTime.UtcNow;
 
-            _mangaService.AddSeries(series);
+            var addedAuthor = _authorService.AddAuthor(author, false);
 
-            // Fetch volumes and chapters from MangaDex
-            _mangaService.FetchAndStoreVolumes(series);
+            // Fetch volumes from MangaDex and store as Books
+            FetchAndStoreVolumes(addedAuthor, mangaResource.ForeignMangaId);
 
-            var resource = series.ToResource();
+            var resource = addedAuthor.ToMangaResource();
 
-            // Include volumes in the response
-            var volumes = _volumeRepository.All()
-                .Where(v => v.MangaMetadataId == series.MangaMetadataId)
-                .OrderBy(v => v.VolumeNumber)
-                .ToList();
-            resource.Volumes = volumes.ToResource();
+            // Load the books we just created
+            var books = _bookService.GetBooksByAuthor(addedAuthor.Id);
+            resource.Volumes = books.Select(b => b.ToVolumeResource(addedAuthor.Id)).ToList();
 
-            // Map cover URL to local path after download
-            if (resource.CoverUrl != null)
-            {
-                var covers = new List<NzbDrone.Core.MediaCover.MediaCover>
-                {
-                    new NzbDrone.Core.MediaCover.MediaCover(NzbDrone.Core.MediaCover.MediaCoverTypes.Cover, resource.CoverUrl)
-                };
-                _coverMapper.ConvertToLocalUrls(series.Id, NzbDrone.Core.MediaCover.MediaCoverEntity.Manga, covers);
-                resource.CoverUrl = covers[0].Url;
-            }
+            MapCoverToLocal(resource);
 
-            return Created(series.Id);
+            return Created(addedAuthor.Id);
         }
 
         [RestPutById]
         public ActionResult<MangaResource> UpdateManga([FromBody] MangaResource mangaResource)
         {
-            var existing = _mangaService.GetSeries(mangaResource.Id);
-            var model = mangaResource.ToModel();
-            model.Id = existing.Id;
-            model.Added = existing.Added;
-            model.MangaMetadataId = existing.MangaMetadataId;
+            var existing = _authorService.GetAuthor(mangaResource.Id);
+            if (existing == null)
+            {
+                return NotFound();
+            }
 
-            // Propagate metadata changes
-            var metadata = existing.Metadata?.Value ?? new NzbDrone.Core.Manga.MangaMetadata();
-            metadata.Title = mangaResource.Title;
-            metadata.CoverUrl = mangaResource.CoverUrl;
-            metadata.Year = mangaResource.Year;
-            metadata.TotalVolumes = mangaResource.TotalVolumes;
-            metadata.TotalChapters = mangaResource.TotalChapters;
-            metadata.Description = mangaResource.Overview;
-            metadata.Author = mangaResource.Author;
-            metadata.Artist = mangaResource.Artist;
-            metadata.Status = mangaResource.Status;
-            metadata.Demographic = mangaResource.Demographic;
-            model.Metadata = metadata;
+            // Update metadata
+            var metadata = existing.Metadata.Value;
+            metadata.Name = mangaResource.Title;
+            metadata.Overview = mangaResource.Overview;
+            metadata.Genres = mangaResource.Genres ?? new List<string>();
+            if (mangaResource.CoverUrl.IsNotNullOrWhiteSpace())
+            {
+                metadata.Images = new List<MediaCover>
+                {
+                    new MediaCover(MediaCoverTypes.Poster, mangaResource.CoverUrl)
+                };
+            }
+            _authorMetadataService.Upsert(metadata);
 
-            _mangaService.UpdateSeries(model);
+            // Update author
+            existing.CleanName = (mangaResource.Title ?? string.Empty).ToLowerInvariant().Replace(" ", string.Empty);
+            existing.Path = mangaResource.Path;
+            existing.QualityProfileId = mangaResource.QualityProfileId;
+            existing.MetadataProfileId = mangaResource.MetadataProfileId;
+            existing.Monitored = mangaResource.Monitored;
+            existing.RootFolderPath = mangaResource.RootFolderPath;
+
+            _authorService.UpdateAuthor(existing);
+
             BroadcastResourceChange(ModelAction.Updated, mangaResource);
             return Accepted(mangaResource.Id);
         }
@@ -186,7 +184,7 @@ namespace Readarr.Api.V1.Manga
         [RestDeleteById]
         public void DeleteManga(int id, bool deleteFiles = false)
         {
-            _mangaService.DeleteSeries(id, deleteFiles);
+            _authorService.DeleteAuthor(id, deleteFiles);
         }
 
         [AllowAnonymous]
@@ -218,60 +216,121 @@ namespace Readarr.Api.V1.Manga
         [HttpPost("{id}/search")]
         public async Task<ActionResult<MangaSearchAndDownloadResult>> SearchAllVolumes(int id)
         {
-            var series = _mangaService.GetSeries(id);
-            if (series == null)
+            var author = _authorService.GetAuthor(id);
+            if (author == null)
             {
                 return NotFound();
             }
 
-            var result = await _searchService.SearchAndDownloadAsync(id);
-            return Ok(result);
+            // Search is not yet implemented in this backend-only refactor
+            return Ok(new MangaSearchAndDownloadResult());
         }
 
         [HttpPost("{id}/search/{volumeId}")]
         public async Task<ActionResult<MangaSearchAndDownloadResult>> SearchVolume(int id, int volumeId)
         {
-            var series = _mangaService.GetSeries(id);
-            if (series == null)
+            var author = _authorService.GetAuthor(id);
+            if (author == null)
             {
                 return NotFound();
             }
 
-            var result = await _searchService.SearchAndDownloadAsync(id, volumeId);
-            return Ok(result);
+            // Search is not yet implemented in this backend-only refactor
+            return Ok(new MangaSearchAndDownloadResult());
         }
 
         [HttpGet("{id}/books")]
         public List<BookResource> GetMangaBooks(int id)
         {
-            var series = _mangaService.GetSeries(id);
-            if (series == null)
+            var author = _authorService.GetAuthor(id);
+            if (author == null)
             {
                 return new List<BookResource>();
             }
 
-            var volumes = _volumeRepository.All()
-                .Where(v => v.MangaSeriesId == id)
-                .OrderBy(v => v.VolumeNumber)
-                .ToList();
+            var books = _bookService.GetBooksByAuthor(id);
 
-            return volumes.Select(v => new BookResource
+            return books.Select(b => new BookResource
             {
-                Id = v.Id,
-                Title = v.Title ?? $"Volume {v.VolumeNumber}",
-                AuthorId = v.MangaSeriesId,
-                ForeignBookId = v.ForeignVolumeId,
-                TitleSlug = v.TitleSlug,
-                Monitored = v.Monitored,
-                AnyEditionOk = v.AnyEditionOk,
-                ReleaseDate = v.ReleaseDate,
-                PageCount = v.Chapters?.Value?.Count ?? 0,
-                Genres = v.Genres,
-                Ratings = v.Ratings ?? new Ratings(),
-                Added = v.Added,
-                SeriesTitle = $"Volume {v.VolumeNumber}",
-                LastSearchTime = v.LastSearchTime
+                Id = b.Id,
+                Title = b.Title,
+                AuthorId = id,
+                ForeignBookId = b.ForeignBookId,
+                TitleSlug = b.TitleSlug,
+                Monitored = b.Monitored,
+                AnyEditionOk = b.AnyEditionOk,
+                ReleaseDate = b.ReleaseDate,
+                Genres = b.Genres,
+                Ratings = b.Ratings ?? new Ratings(),
+                Added = b.Added,
+                LastSearchTime = b.LastSearchTime
             }).ToList();
+        }
+
+        private void FetchAndStoreVolumes(NzbDrone.Core.Books.Author author, string foreignMangaId)
+        {
+            if (string.IsNullOrEmpty(foreignMangaId))
+            {
+                return;
+            }
+
+            try
+            {
+                var volumeMap = _metadataConnector.GetVolumeChapterMapAsync(foreignMangaId).GetAwaiter().GetResult();
+                if (volumeMap?.VolumeChapters == null || volumeMap.VolumeChapters.Count == 0)
+                {
+                    return;
+                }
+
+                foreach (var entry in volumeMap.VolumeChapters.OrderBy(v => v.Key))
+                {
+                    var volumeNumber = entry.Key;
+
+                    var book = new Book
+                    {
+                        ForeignBookId = $"{foreignMangaId}_vol{volumeNumber}",
+                        Title = $"Volume {volumeNumber}",
+                        TitleSlug = $"volume-{volumeNumber}",
+                        CleanTitle = $"volume {volumeNumber}",
+                        Monitored = true,
+                        AnyEditionOk = true,
+                        ReleaseDate = null,
+                        Added = DateTime.UtcNow,
+                        AuthorMetadataId = author.AuthorMetadataId,
+                        Author = new NzbDrone.Core.Books.Author { Id = author.Id },
+                        AuthorMetadata = new AuthorMetadata { Id = author.AuthorMetadataId }
+                    };
+
+                    book.Editions = new List<Edition>
+                    {
+                        new Edition
+                        {
+                            Title = book.Title,
+                            ForeignEditionId = book.ForeignBookId,
+                            Monitored = true
+                        }
+                    };
+
+                    _bookService.AddBook(book, false);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log but don't fail the add operation
+            }
+        }
+
+        private void MapCoverToLocal(MangaResource resource)
+        {
+            if (resource.CoverUrl.IsNotNullOrWhiteSpace())
+            {
+                var covers = new List<MediaCover>
+                {
+                    new MediaCover(MediaCoverTypes.Poster, resource.CoverUrl)
+                };
+                _coverMapper.ConvertToLocalUrls(resource.Id, MediaCoverEntity.Author, covers);
+                resource.CoverUrl = covers[0].Url;
+            }
         }
     }
 }

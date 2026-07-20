@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
 using NzbDrone.Core.Books;
-using NzbDrone.Core.Manga;
+using NzbDrone.Core.MediaCover;
 using Readarr.Http.REST;
 
 namespace Readarr.Api.V1.Manga
@@ -57,34 +57,39 @@ namespace Readarr.Api.V1.Manga
         public int DownloadedChapters { get; set; }
     }
 
+    public class VolumeResource
+    {
+        public int Id { get; set; }
+        public int AuthorId { get; set; }
+        public string ForeignVolumeId { get; set; }
+        public string Title { get; set; }
+        public DateTime? ReleaseDate { get; set; }
+        public bool Monitored { get; set; }
+        public DateTime Added { get; set; }
+    }
+
     public static class MangaResourceMapper
     {
-        public static MangaResource ToResource(this MangaSeries model)
+        public static MangaResource ToMangaResource(this NzbDrone.Core.Books.Author model)
         {
             if (model == null)
             {
                 return null;
             }
 
+            var metadata = model.Metadata?.Value;
+
             return new MangaResource
             {
                 Id = model.Id,
-                MangaMetadataId = model.MangaMetadataId,
+                MangaMetadataId = model.AuthorMetadataId,
 
-                ForeignMangaId = model.ForeignMangaId,
-                Title = model.Name,
+                ForeignMangaId = metadata?.ForeignAuthorId,
+                Title = metadata?.Name,
                 TitleSlug = model.CleanName,
-                Overview = model.Metadata?.Value?.Description,
-                Author = model.Metadata?.Value?.Author,
-                Artist = model.Metadata?.Value?.Artist,
-                Status = model.Metadata?.Value?.Status,
-                Demographic = model.Metadata?.Value?.Demographic,
-                Year = model.Metadata?.Value?.Year ?? 0,
-                TotalVolumes = model.Metadata?.Value?.TotalVolumes ?? 0,
-                TotalChapters = model.Metadata?.Value?.TotalChapters ?? 0,
-                Genres = model.Metadata?.Value?.Genres ?? new List<string>(),
-                Tags = model.Metadata?.Value?.Tags ?? new List<string>(),
-                CoverUrl = model.Metadata?.Value?.CoverUrl,
+                Overview = metadata?.Overview,
+                Genres = metadata?.Genres ?? new List<string>(),
+                CoverUrl = metadata?.Images?.FirstOrDefault(i => i.CoverType == MediaCoverTypes.Poster)?.Url,
 
                 Path = model.Path,
                 QualityProfileId = model.QualityProfileId,
@@ -93,7 +98,6 @@ namespace Readarr.Api.V1.Manga
                 MonitorNewItems = model.MonitorNewItems,
                 RootFolderPath = model.RootFolderPath,
                 CleanName = model.CleanName,
-                SortName = model.Metadata?.Value?.SortTitle,
 
                 TagIds = model.Tags,
                 Added = model.Added,
@@ -101,33 +105,93 @@ namespace Readarr.Api.V1.Manga
             };
         }
 
-        public static MangaSeries ToModel(this MangaResource resource)
+        public static NzbDrone.Core.Books.Author ToAuthorModel(this MangaResource resource)
         {
             if (resource == null)
             {
                 return null;
             }
 
-            return new MangaSeries
+            return new NzbDrone.Core.Books.Author
             {
                 Id = resource.Id,
-                MangaMetadataId = resource.MangaMetadataId,
-                ForeignMangaId = resource.ForeignMangaId,
-                CleanName = resource.CleanName,
+                CleanName = (resource.Title ?? string.Empty).ToLowerInvariant().Replace(" ", string.Empty),
                 Path = resource.Path,
                 QualityProfileId = resource.QualityProfileId,
                 MetadataProfileId = resource.MetadataProfileId,
                 Monitored = resource.Monitored,
                 MonitorNewItems = resource.MonitorNewItems,
                 RootFolderPath = resource.RootFolderPath,
-                Tags = resource.TagIds,
+                Tags = resource.TagIds ?? new HashSet<int>(),
+                ContentType = ContentType.Manga,
                 Added = resource.Added
             };
         }
 
-        public static List<MangaResource> ToResource(this IEnumerable<MangaSeries> models)
+        public static AuthorMetadata ToAuthorMetadata(this MangaResource resource)
         {
-            return models?.Select(ToResource).ToList();
+            if (resource == null)
+            {
+                return null;
+            }
+
+            var metadata = new AuthorMetadata
+            {
+                ForeignAuthorId = resource.ForeignMangaId,
+                Name = resource.Title,
+                TitleSlug = resource.TitleSlug ?? (resource.Title ?? string.Empty).ToLowerInvariant().Replace(" ", "-"),
+                Overview = resource.Overview,
+                Genres = resource.Genres ?? new List<string>(),
+                Status = AuthorStatusType.Ended
+            };
+
+            // Map manga status to AuthorStatusType
+            if (resource.Status != null)
+            {
+                metadata.Status = resource.Status.ToLowerInvariant() switch
+                {
+                    "ongoing" => AuthorStatusType.Continuing,
+                    "continuing" => AuthorStatusType.Continuing,
+                    "completed" => AuthorStatusType.Ended,
+                    "ended" => AuthorStatusType.Ended,
+                    _ => AuthorStatusType.Ended
+                };
+            }
+
+            // Map cover URL to Images
+            if (resource.CoverUrl.IsNotNullOrWhiteSpace())
+            {
+                metadata.Images = new List<MediaCover>
+                {
+                    new MediaCover(MediaCoverTypes.Poster, resource.CoverUrl)
+                };
+            }
+
+            return metadata;
+        }
+
+        public static VolumeResource ToVolumeResource(this Book model, int authorId)
+        {
+            if (model == null)
+            {
+                return null;
+            }
+
+            return new VolumeResource
+            {
+                Id = model.Id,
+                AuthorId = authorId,
+                ForeignVolumeId = model.ForeignBookId,
+                Title = model.Title,
+                ReleaseDate = model.ReleaseDate,
+                Monitored = model.Monitored,
+                Added = model.Added
+            };
+        }
+
+        public static List<MangaResource> ToMangaResource(this IEnumerable<NzbDrone.Core.Books.Author> models)
+        {
+            return models?.Select(ToMangaResource).ToList();
         }
     }
 }
