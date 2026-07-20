@@ -1,5 +1,5 @@
 import { createAction } from 'redux-actions';
-import { filterBuilderTypes, filterBuilderValueTypes, sortDirections } from 'Helpers/Props';
+import { filterBuilderTypes, filterBuilderValueTypes, filterTypePredicates, sortDirections } from 'Helpers/Props';
 import { createThunk, handleThunks } from 'Store/thunks';
 import createAjaxRequest from 'Utilities/createAjaxRequest';
 import { filterPredicates, filters, sortPredicates } from './mangaActions';
@@ -127,6 +127,20 @@ export const defaultState = {
     }
   ],
 
+  sortPredicates: {
+    ...sortPredicates,
+
+    bookCount: function(item) {
+      const { statistics = {} } = item;
+      return statistics.bookCount || 0;
+    },
+
+    ratings: function(item) {
+      const { ratings = {} } = item;
+      return ratings.value;
+    }
+  },
+
   filterBuilderProps: [
     {
       name: 'monitored',
@@ -167,7 +181,19 @@ export const defaultState = {
     }
   ],
 
-  selectedFilterKey: 'all'
+  selectedFilterKey: 'all',
+
+  filters,
+
+  filterPredicates: {
+    ...filterPredicates,
+
+    bookCount: function(item, filterValue, type) {
+      const predicate = filterTypePredicates[type];
+      const bookCount = item.statistics ? item.statistics.bookCount : 0;
+      return predicate(bookCount, filterValue);
+    }
+  }
 };
 
 export const persistState = [

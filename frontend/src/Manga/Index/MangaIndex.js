@@ -205,6 +205,7 @@ function MangaIndex(props) {
             <PageJumpBar
               items={jumpBarItems}
               jumpToCharacter={jumpToCharacter}
+              onItemPress={(character) => setJumpToCharacter(character)}
             />
         }
       </div>

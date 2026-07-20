@@ -17,10 +17,18 @@ import createSetSettingValueReducer from './Creators/Reducers/createSetSettingVa
 
 function prepareMangaForStore(manga) {
   const coverUrl = getProxiedCoverUrl(manga.coverUrl);
+  const apiStats = manga.statistics || {};
 
   return {
     ...manga,
-    images: coverUrl ? [{ coverType: 'poster', url: coverUrl }] : []
+    images: coverUrl ? [{ coverType: 'poster', url: coverUrl }] : [],
+    statistics: {
+      bookCount: apiStats.totalVolumes ?? 0,
+      bookFileCount: apiStats.downloadedVolumes ?? 0,
+      availableBookCount: apiStats.downloadedVolumes ?? 0,
+      totalBookCount: apiStats.totalVolumes ?? 0,
+      sizeOnDisk: 0
+    }
   };
 }
 
