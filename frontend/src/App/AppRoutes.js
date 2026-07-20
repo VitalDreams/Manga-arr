@@ -12,8 +12,6 @@ import BookshelfConnector from 'Bookshelf/BookshelfConnector';
 import CalendarPageConnector from 'Calendar/CalendarPageConnector';
 import NotFound from 'Components/NotFound';
 import Switch from 'Components/Router/Switch';
-import MangaDetailsPageConnector from 'Manga/Details/MangaDetailsPageConnector';
-import MangaIndexConnector from 'Manga/Index/MangaIndexConnector';
 import AddNewItemConnector from 'Search/AddNewItemConnector';
 import CustomFormatSettingsConnector from 'Settings/CustomFormats/CustomFormatSettingsConnector';
 import DevelopmentSettingsConnector from 'Settings/Development/DevelopmentSettingsConnector';
@@ -48,13 +46,13 @@ function AppRoutes(props) {
   return (
     <Switch>
       {/*
-        Manga (default)
+        Author
       */}
 
       <Route
         exact={true}
         path="/"
-        component={MangaIndexConnector}
+        component={AuthorIndexConnector}
       />
 
       {
@@ -112,18 +110,11 @@ function AppRoutes(props) {
       />
 
       {/*
-        Manga
       */}
 
       <Route
-        path="/manga"
-        component={MangaIndexConnector}
-      />
 
       <Route
-        path="/manga/:titleSlug"
-        component={MangaDetailsPageConnector}
-      />
 
       {/*
         Calendar
