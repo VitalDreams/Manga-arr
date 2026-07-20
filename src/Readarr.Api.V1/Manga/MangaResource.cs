@@ -137,11 +137,16 @@ namespace Readarr.Api.V1.Manga
                 return null;
             }
 
+            var title = resource.Title ?? string.Empty;
+
             var metadata = new AuthorMetadata
             {
                 ForeignAuthorId = resource.ForeignMangaId,
                 Name = resource.Title,
-                TitleSlug = resource.TitleSlug ?? (resource.Title ?? string.Empty).ToLowerInvariant().Replace(" ", "-"),
+                SortName = title.ToLower(),
+                NameLastFirst = resource.Title,
+                SortNameLastFirst = title.ToLower(),
+                TitleSlug = resource.TitleSlug ?? title.ToLowerInvariant().Replace(" ", "-"),
                 Overview = BuildOverview(resource.Overview, resource.Author, resource.Artist, resource.Demographic, resource.Year, resource.TotalVolumes, resource.TotalChapters),
                 Genres = resource.Genres ?? new List<string>(),
                 Status = AuthorStatusType.Ended
