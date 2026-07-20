@@ -27,8 +27,9 @@ namespace Readarr.Api.V1.Manga
         public int TotalVolumes { get; set; }
         public int TotalChapters { get; set; }
         public List<string> Genres { get; set; }
-        public List<string> Tags { get; set; }
+        public List<Links> Links { get; set; }
         public string CoverUrl { get; set; }
+        public Ratings Ratings { get; set; }
 
         // View & Edit
         public string Path { get; set; }
@@ -43,7 +44,7 @@ namespace Readarr.Api.V1.Manga
         public string CleanName { get; set; }
         public string SortName { get; set; }
 
-        public HashSet<int> TagIds { get; set; }
+        public HashSet<int> Tags { get; set; }
         public DateTime Added { get; set; }
 
         public MangaStatisticsResource Statistics { get; set; }
@@ -91,7 +92,9 @@ namespace Readarr.Api.V1.Manga
                 TotalVolumes = totalVolumes,
                 TotalChapters = totalChapters,
                 Genres = metadata?.Genres ?? new List<string>(),
+                Links = metadata?.Links ?? new List<Links>(),
                 CoverUrl = metadata?.Images?.FirstOrDefault(i => i.CoverType == MediaCoverTypes.Poster)?.Url,
+                Ratings = metadata?.Ratings ?? new Ratings(),
 
                 Path = model.Path,
                 QualityProfileId = model.QualityProfileId,
@@ -101,7 +104,7 @@ namespace Readarr.Api.V1.Manga
                 RootFolderPath = model.RootFolderPath,
                 CleanName = model.CleanName,
 
-                TagIds = model.Tags,
+                Tags = model.Tags,
                 Added = model.Added,
                 Statistics = new MangaStatisticsResource()
             };
@@ -124,7 +127,7 @@ namespace Readarr.Api.V1.Manga
                 Monitored = resource.Monitored,
                 MonitorNewItems = resource.MonitorNewItems,
                 RootFolderPath = resource.RootFolderPath,
-                Tags = resource.TagIds ?? new HashSet<int>(),
+                Tags = resource.Tags ?? new HashSet<int>(),
                 ContentType = ContentType.Manga,
                 Added = resource.Added
             };

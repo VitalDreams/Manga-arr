@@ -233,13 +233,12 @@ export const actionHandlers = handleThunks({
       totalVolumes: 0,
       totalChapters: 0,
       genres: [],
-      tags: [],
+      tags: payload.tags || [],
       coverUrl: clonedItem.coverUrl || '',
       rootFolderPath: payload.rootFolderPath,
       qualityProfileId: payload.qualityProfileId,
       metadataProfileId: payload.metadataProfileId,
-      monitored: true,
-      tagIds: payload.tags || []
+      monitored: true
     };
 
     const promise = createAjaxRequest({

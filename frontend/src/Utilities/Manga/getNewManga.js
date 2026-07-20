@@ -19,13 +19,12 @@ function getNewManga(searchResult, payload) {
     totalVolumes: 0,
     totalChapters: 0,
     genres: [],
-    tags: [],
+    tags: tags || [],
     coverUrl: searchResult.coverUrl || '',
     rootFolderPath,
     qualityProfileId,
     metadataProfileId,
-    monitored: true,
-    tagIds: tags || []
+    monitored: true
   };
 }
 
