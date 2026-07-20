@@ -168,7 +168,7 @@ function createMapStateToProps() {
         ...errors,
         isPopulated,
         isSmallScreen: dimensions.isSmallScreen,
-        authenticationEnabled: systemStatus.authentication !== 'none',
+        authenticationEnabled: true,
         enableColorImpairedMode
       };
     }

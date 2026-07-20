@@ -230,7 +230,7 @@ MangaIndexPosters.propTypes = {
   posterOptions: PropTypes.object.isRequired,
   jumpToCharacter: PropTypes.string,
   scrollTop: PropTypes.number.isRequired,
-  scroller: PropTypes.instanceOf(Element).isRequired,
+  scroller: PropTypes.instanceOf(Element),
   isSmallScreen: PropTypes.bool.isRequired,
   selectedState: PropTypes.object.isRequired,
   onSelectedChange: PropTypes.func.isRequired,

@@ -1,7 +1,9 @@
 import PropTypes from 'prop-types';
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Tab, TabList, TabPanel, Tabs } from 'react-tabs';
 import MangaPoster from 'Manga/MangaPoster';
+import EditMangaModalConnector from 'Manga/Edit/EditMangaModalConnector';
+import DeleteMangaModal from 'Manga/Delete/DeleteMangaModal';
 import MonitorToggleButton from 'Components/MonitorToggleButton';
 import IconButton from 'Components/Link/IconButton';
 import LoadingIndicator from 'Components/Loading/LoadingIndicator';
@@ -48,6 +50,25 @@ function MangaDetails(props) {
   } = statistics;
 
   const [selectedTabIndex, setSelectedTabIndex] = useState(0);
+  const [isEditMangaModalOpen, setIsEditMangaModalOpen] = useState(false);
+  const [isDeleteMangaModalOpen, setIsDeleteMangaModalOpen] = useState(false);
+
+  const onEditMangaPress = useCallback(() => {
+    setIsEditMangaModalOpen(true);
+  }, []);
+
+  const onEditMangaModalClose = useCallback(() => {
+    setIsEditMangaModalOpen(false);
+  }, []);
+
+  const onDeleteMangaPress = useCallback(() => {
+    setIsEditMangaModalOpen(false);
+    setIsDeleteMangaModalOpen(true);
+  }, []);
+
+  const onDeleteMangaModalClose = useCallback(() => {
+    setIsDeleteMangaModalOpen(false);
+  }, []);
 
   return (
     <PageContent title={title}>
@@ -64,6 +85,18 @@ function MangaDetails(props) {
             label={monitored ? translate('Unmonitor') : translate('Monitor')}
             iconName={monitored ? icons.MONITORED : icons.UNMONITORED}
             onPress={() => onMonitorTogglePress(!monitored)}
+          />
+
+          <PageToolbarButton
+            label={translate('Edit')}
+            iconName={icons.EDIT}
+            onPress={onEditMangaPress}
+          />
+
+          <PageToolbarButton
+            label={translate('Delete')}
+            iconName={icons.DELETE}
+            onPress={onDeleteMangaPress}
           />
         </PageToolbarSection>
       </PageToolbar>
@@ -220,6 +253,19 @@ function MangaDetails(props) {
           </TabPanel>
         </Tabs>
       </PageContentBody>
+
+      <EditMangaModalConnector
+        isOpen={isEditMangaModalOpen}
+        mangaId={id}
+        onModalClose={onEditMangaModalClose}
+        onDeleteMangaPress={onDeleteMangaPress}
+      />
+
+      <DeleteMangaModal
+        isOpen={isDeleteMangaModalOpen}
+        mangaId={id}
+        onModalClose={onDeleteMangaModalClose}
+      />
     </PageContent>
   );
 }

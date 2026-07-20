@@ -1,6 +1,8 @@
 import PropTypes from 'prop-types';
 import React, { useState, useCallback } from 'react';
 import MangaPoster from 'Manga/MangaPoster';
+import EditMangaModalConnector from 'Manga/Edit/EditMangaModalConnector';
+import DeleteMangaModal from 'Manga/Delete/DeleteMangaModal';
 import AuthorIndexProgressBar from 'Author/Index/ProgressBar/AuthorIndexProgressBar';
 import CheckInput from 'Components/Form/CheckInput';
 import Label from 'Components/Label';
@@ -36,6 +38,25 @@ function MangaIndexPoster(props) {
   } = props;
 
   const [hasPosterError, setHasPosterError] = useState(false);
+  const [isEditMangaModalOpen, setIsEditMangaModalOpen] = useState(false);
+  const [isDeleteMangaModalOpen, setIsDeleteMangaModalOpen] = useState(false);
+
+  const onEditMangaPress = useCallback(() => {
+    setIsEditMangaModalOpen(true);
+  }, []);
+
+  const onEditMangaModalClose = useCallback(() => {
+    setIsEditMangaModalOpen(false);
+  }, []);
+
+  const onDeleteMangaPress = useCallback(() => {
+    setIsEditMangaModalOpen(false);
+    setIsDeleteMangaModalOpen(true);
+  }, []);
+
+  const onDeleteMangaModalClose = useCallback(() => {
+    setIsDeleteMangaModalOpen(false);
+  }, []);
 
   const {
     bookCount = 0,
@@ -104,7 +125,7 @@ function MangaIndexPoster(props) {
               className={styles.action}
               name={icons.EDIT}
               title={translate('EditManga')}
-              onPress={() => {}}
+              onPress={onEditMangaPress}
             />
           </Label>
 
@@ -167,6 +188,19 @@ function MangaIndexPoster(props) {
               {monitored ? 'Monitored' : 'Unmonitored'}
             </div>
         }
+
+        <EditMangaModalConnector
+          isOpen={isEditMangaModalOpen}
+          mangaId={id}
+          onModalClose={onEditMangaModalClose}
+          onDeleteMangaPress={onDeleteMangaPress}
+        />
+
+        <DeleteMangaModal
+          isOpen={isDeleteMangaModalOpen}
+          mangaId={id}
+          onModalClose={onDeleteMangaModalClose}
+        />
       </div>
     </div>
   );
