@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Common.Extensions;
@@ -11,7 +10,6 @@ using NzbDrone.Core.Books;
 using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.MediaCover;
 using NzbDrone.Core.Messaging.Events;
-using NzbDrone.Core.Manga;
 using NzbDrone.Core.Manga.Connectors;
 using NzbDrone.Http.REST.Attributes;
 using NzbDrone.SignalR;
@@ -27,7 +25,6 @@ namespace Readarr.Api.V1.Manga
         private readonly IAuthorService _authorService;
         private readonly IAuthorMetadataService _authorMetadataService;
         private readonly IBookService _bookService;
-        private readonly IEditionService _editionService;
         private readonly IMangaMetadataConnector _metadataConnector;
         private readonly IMapCoversToLocal _coverMapper;
         private readonly IHttpClient _httpClient;
@@ -36,7 +33,6 @@ namespace Readarr.Api.V1.Manga
             IAuthorService authorService,
             IAuthorMetadataService authorMetadataService,
             IBookService bookService,
-            IEditionService editionService,
             IMangaMetadataConnector metadataConnector,
             IMapCoversToLocal coverMapper,
             IHttpClient httpClient,
@@ -46,7 +42,6 @@ namespace Readarr.Api.V1.Manga
             _authorService = authorService;
             _authorMetadataService = authorMetadataService;
             _bookService = bookService;
-            _editionService = editionService;
             _metadataConnector = metadataConnector;
             _coverMapper = coverMapper;
             _httpClient = httpClient;
@@ -153,17 +148,16 @@ namespace Readarr.Api.V1.Manga
                 return NotFound();
             }
 
-            // Update metadata
+            // Update metadata using ToAuthorMetadata which preserves structured manga data in Overview
+            var newMetadata = mangaResource.ToAuthorMetadata();
             var metadata = existing.Metadata.Value;
-            metadata.Name = mangaResource.Title;
-            metadata.Overview = mangaResource.Overview;
-            metadata.Genres = mangaResource.Genres ?? new List<string>();
-            if (mangaResource.CoverUrl.IsNotNullOrWhiteSpace())
+            metadata.Name = newMetadata.Name;
+            metadata.Overview = newMetadata.Overview;
+            metadata.Genres = newMetadata.Genres;
+            metadata.Status = newMetadata.Status;
+            if (newMetadata.Images?.Count > 0)
             {
-                metadata.Images = new List<MediaCover>
-                {
-                    new MediaCover(MediaCoverTypes.Poster, mangaResource.CoverUrl)
-                };
+                metadata.Images = newMetadata.Images;
             }
             _authorMetadataService.Upsert(metadata);
 

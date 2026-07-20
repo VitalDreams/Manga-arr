@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 using NzbDrone.Core.Books;
 using NzbDrone.Core.MediaCover;
@@ -70,6 +71,9 @@ namespace Readarr.Api.V1.Manga
 
     public static class MangaResourceMapper
     {
+        // Prefix for structured manga metadata stored in Overview
+        private const string MangaMetaPrefix = "\n\n[MANGA_META:";
+
         public static MangaResource ToMangaResource(this NzbDrone.Core.Books.Author model)
         {
             if (model == null)
@@ -78,6 +82,7 @@ namespace Readarr.Api.V1.Manga
             }
 
             var metadata = model.Metadata?.Value;
+            var (overview, mangaAuthor, artist, demographic, year, totalVolumes, totalChapters) = ParseOverview(metadata?.Overview);
 
             return new MangaResource
             {
@@ -87,7 +92,14 @@ namespace Readarr.Api.V1.Manga
                 ForeignMangaId = metadata?.ForeignAuthorId,
                 Title = metadata?.Name,
                 TitleSlug = model.CleanName,
-                Overview = metadata?.Overview,
+                Overview = overview,
+                Author = mangaAuthor,
+                Artist = artist,
+                Status = metadata?.Status == AuthorStatusType.Continuing ? "continuing" : "ended",
+                Demographic = demographic,
+                Year = year,
+                TotalVolumes = totalVolumes,
+                TotalChapters = totalChapters,
                 Genres = metadata?.Genres ?? new List<string>(),
                 CoverUrl = metadata?.Images?.FirstOrDefault(i => i.CoverType == MediaCoverTypes.Poster)?.Url,
 
@@ -140,7 +152,7 @@ namespace Readarr.Api.V1.Manga
                 ForeignAuthorId = resource.ForeignMangaId,
                 Name = resource.Title,
                 TitleSlug = resource.TitleSlug ?? (resource.Title ?? string.Empty).ToLowerInvariant().Replace(" ", "-"),
-                Overview = resource.Overview,
+                Overview = BuildOverview(resource.Overview, resource.Author, resource.Artist, resource.Demographic, resource.Year, resource.TotalVolumes, resource.TotalChapters),
                 Genres = resource.Genres ?? new List<string>(),
                 Status = AuthorStatusType.Ended
             };
@@ -192,6 +204,92 @@ namespace Readarr.Api.V1.Manga
         public static List<MangaResource> ToMangaResource(this IEnumerable<NzbDrone.Core.Books.Author> models)
         {
             return models?.Select(ToMangaResource).ToList();
+        }
+
+        /// <summary>
+        /// Builds the Overview field by combining the user-provided overview with structured manga metadata.
+        /// Format: "User overview\n\n[MANGA_META:Author=X|Artist=Y|Demographic=Z|Year=W|TotalVolumes=V|TotalChapters=C]"
+        /// </summary>
+        private static string BuildOverview(string overview, string author, string artist, string demographic, int year, int totalVolumes, int totalChapters)
+        {
+            var parts = new List<string>();
+            if (author.IsNotNullOrWhiteSpace()) parts.Add($"Author={Escape(author)}");
+            if (artist.IsNotNullOrWhiteSpace()) parts.Add($"Artist={Escape(artist)}");
+            if (demographic.IsNotNullOrWhiteSpace()) parts.Add($"Demographic={Escape(demographic)}");
+            if (year > 0) parts.Add($"Year={year}");
+            if (totalVolumes > 0) parts.Add($"TotalVolumes={totalVolumes}");
+            if (totalChapters > 0) parts.Add($"TotalChapters={totalChapters}");
+
+            var baseOverview = overview ?? string.Empty;
+
+            if (parts.Count == 0)
+            {
+                return baseOverview;
+            }
+
+            return $"{baseOverview}{MangaMetaPrefix}{string.Join("|", parts)}]";
+        }
+
+        /// <summary>
+        /// Parses the Overview field to extract the user overview and structured manga metadata.
+        /// </summary>
+        private static (string overview, string author, string artist, string demographic, int year, int totalVolumes, int totalChapters) ParseOverview(string rawOverview)
+        {
+            if (rawOverview == null)
+            {
+                return (null, null, null, null, 0, 0, 0);
+            }
+
+            var metaIndex = rawOverview.IndexOf(MangaMetaPrefix, StringComparison.Ordinal);
+            if (metaIndex < 0)
+            {
+                return (rawOverview, null, null, null, 0, 0, 0);
+            }
+
+            var overview = rawOverview.Substring(0, metaIndex).TrimEnd();
+            var metaSection = rawOverview.Substring(metaIndex);
+
+            // Parse [MANGA_META:key=value|key=value]
+            var match = Regex.Match(metaSection, @"\[MANGA_META:(.+?)\]");
+            if (!match.Success)
+            {
+                return (overview, null, null, null, 0, 0, 0);
+            }
+
+            var pairs = match.Groups[1].Value.Split('|');
+            string author = null, artist = null, demographic = null;
+            int year = 0, totalVolumes = 0, totalChapters = 0;
+
+            foreach (var pair in pairs)
+            {
+                var eqIndex = pair.IndexOf('=');
+                if (eqIndex < 0) continue;
+
+                var key = pair.Substring(0, eqIndex);
+                var value = Unescape(pair.Substring(eqIndex + 1));
+
+                switch (key)
+                {
+                    case "Author": author = value; break;
+                    case "Artist": artist = value; break;
+                    case "Demographic": demographic = value; break;
+                    case "Year": int.TryParse(value, out year); break;
+                    case "TotalVolumes": int.TryParse(value, out totalVolumes); break;
+                    case "TotalChapters": int.TryParse(value, out totalChapters); break;
+                }
+            }
+
+            return (overview, author, artist, demographic, year, totalVolumes, totalChapters);
+        }
+
+        private static string Escape(string value)
+        {
+            return value?.Replace("|", "\\|").Replace("=", "\\=").Replace("]", "\\]") ?? string.Empty;
+        }
+
+        private static string Unescape(string value)
+        {
+            return value?.Replace("\\|", "|").Replace("\\=", "=").Replace("\\]", "]") ?? string.Empty;
         }
     }
 }
