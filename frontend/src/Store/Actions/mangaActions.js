@@ -209,6 +209,7 @@ function getSaveAjaxOptions({ ajaxOptions, payload }) {
 export const actionHandlers = handleThunks({
 
   [FETCH_MANGA]: function(getState, payload, dispatch) {
+    console.log("FETCH_MANGA dispatched", payload);
     dispatch(set({ section, isFetching: true }));
 
     const { id, ...otherPayload } = payload;
@@ -220,6 +221,7 @@ export const actionHandlers = handleThunks({
     });
 
     request.done((data) => {
+      console.log("FETCH_MANGA success", data.length, "items");
       const prepared = prepareMangaResponse(data);
       dispatch(batchActions([
         id == null ?
@@ -235,6 +237,7 @@ export const actionHandlers = handleThunks({
     });
 
     request.fail((xhr) => {
+      console.log("FETCH_MANGA fail", xhr.status, xhr.responseText);
       dispatch(set({
         section,
         isFetching: false,
