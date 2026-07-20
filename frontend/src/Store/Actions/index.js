@@ -16,6 +16,9 @@ import * as customFilters from './customFilterActions';
 import * as editions from './editionActions';
 import * as history from './historyActions';
 import * as interactiveImportActions from './interactiveImportActions';
+import * as manga from './mangaActions';
+import * as mangaDetails from './mangaDetailsActions';
+import * as mangaIndex from './mangaIndexActions';
 import * as oAuth from './oAuthActions';
 import * as organizePreview from './organizePreviewActions';
 import * as paths from './pathActions';
@@ -28,6 +31,7 @@ import * as series from './seriesActions';
 import * as settings from './settingsActions';
 import * as system from './systemActions';
 import * as tags from './tagActions';
+import * as volumes from './volumeActions';
 import * as wanted from './wantedActions';
 
 export default [
@@ -49,6 +53,9 @@ export default [
   editions,
   history,
   interactiveImportActions,
+  manga,
+  mangaDetails,
+  mangaIndex,
   oAuth,
   organizePreview,
   paths,
@@ -61,5 +68,6 @@ export default [
   settings,
   system,
   tags,
+  volumes,
   wanted
 ];

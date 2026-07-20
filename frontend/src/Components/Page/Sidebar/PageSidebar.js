@@ -23,8 +23,12 @@ const links = [
     iconName: icons.AUTHOR_CONTINUING,
     title: () => translate('Library'),
     to: '/',
-    alias: '/authors',
+    alias: '/manga',
     children: [
+      {
+        title: () => translate('Manga'),
+        to: '/manga'
+      },
       {
         title: () => translate('Mangaka'),
         to: '/authors'

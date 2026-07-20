@@ -1,0 +1,103 @@
+.errorMessage {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 20px;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.posterContainer {
+  flex-shrink: 0;
+  width: 250px;
+  margin-right: 20px;
+}
+
+.poster {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+.info {
+  flex: 1 0 1%;
+  min-width: 0;
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 300;
+}
+
+.year {
+  margin-left: 10px;
+  color: var(--disabledColor);
+  font-size: 20px;
+}
+
+.overview {
+  margin-top: 15px;
+  line-height: 1.5;
+}
+
+.details {
+  margin-top: 15px;
+}
+
+.detailRow {
+  display: flex;
+  padding: 5px 0;
+}
+
+.detailLabel {
+  width: 150px;
+  color: var(--labelColor);
+}
+
+.detailValue {
+  flex: 1;
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 15px;
+}
+
+.statItem {
+  margin-right: 30px;
+  margin-bottom: 10px;
+}
+
+.statLabel {
+  color: var(--labelColor);
+  font-size: 12px;
+}
+
+.statValue {
+  font-size: 20px;
+  font-weight: 300;
+}
+
+.tabs {
+  margin-top: 20px;
+}
+
+@media only screen and (max-width: $breakpointSmall) {
+  .header {
+    flex-direction: column;
+  }
+
+  .posterContainer {
+    width: 100%;
+    margin-right: 0;
+    margin-bottom: 15px;
+  }
+}

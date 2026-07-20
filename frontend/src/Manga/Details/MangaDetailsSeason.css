@@ -1,0 +1,3 @@
+.headerCell {
+  composes: headerCell from '~Components/Table/Cells/TableHeaderCell.css';
+}
