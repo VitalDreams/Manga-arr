@@ -28,7 +28,6 @@ function MangaIndex(props) {
     sortDirection,
     view,
     posterOptions,
-    jumpToCharacter,
     isSmallScreen,
     isRefreshingManga,
     isRssSyncExecuting,
@@ -46,6 +45,7 @@ function MangaIndex(props) {
   const [lastToggled, setLastToggled] = useState(null);
   const [selectedState, setSelectedState] = useState({});
   const [jumpBarItems, setJumpBarItems] = useState({ order: [] });
+  const [jumpToCharacter, setJumpToCharacter] = useState(undefined);
 
   const registerScroller = useCallback((ref) => {
     setScroller(ref);
@@ -222,7 +222,6 @@ MangaIndex.propTypes = {
   sortDirection: PropTypes.string.isRequired,
   view: PropTypes.string.isRequired,
   posterOptions: PropTypes.object.isRequired,
-  jumpToCharacter: PropTypes.string,
   isSmallScreen: PropTypes.bool.isRequired,
   isRefreshingManga: PropTypes.bool.isRequired,
   isRssSyncExecuting: PropTypes.bool.isRequired,

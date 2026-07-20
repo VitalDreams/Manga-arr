@@ -28,7 +28,7 @@ function MangaDetailsPageConnector(props) {
     items
   } = manga;
 
-  const mangaIndex = _.findIndex(items, { titleSlug });
+  const mangaItem = _.find(items, { titleSlug });
 
   useEffect(() => {
     if (!isPopulated && !isFetching) {
@@ -36,11 +36,11 @@ function MangaDetailsPageConnector(props) {
     }
   }, [isPopulated, isFetching, dispatch]);
 
-  useEffect(() => {
-    if (!titleSlug || (isPopulated && mangaIndex === -1)) {
-      dispatch(push(`${window.Readarr.urlBase}/`));
-    }
-  }, [titleSlug, isPopulated, mangaIndex, dispatch]);
+  if (!titleSlug) {
+    return (
+      <NotFound message={translate('SorryThatAuthorCannotBeFound')} />
+    );
+  }
 
   if (isFetching && !isPopulated) {
     return (
@@ -60,18 +60,24 @@ function MangaDetailsPageConnector(props) {
     );
   }
 
-  if (!titleSlug || (isPopulated && mangaIndex === -1)) {
+  if (isPopulated && !isFetching && !mangaItem) {
     return (
-      <NotFound
-        message={translate('SorryThatAuthorCannotBeFound')}
-      />
+      <NotFound message={translate('SorryThatAuthorCannotBeFound')} />
+    );
+  }
+
+  if (!mangaItem) {
+    return (
+      <PageContent title={translate('Loading')}>
+        <PageContentBody>
+          <LoadingIndicator />
+        </PageContentBody>
+      </PageContent>
     );
   }
 
   return (
-    <MangaDetailsConnector
-      titleSlug={titleSlug}
-    />
+    <MangaDetailsConnector titleSlug={titleSlug} />
   );
 }
 
