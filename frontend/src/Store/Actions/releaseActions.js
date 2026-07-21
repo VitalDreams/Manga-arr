@@ -252,6 +252,7 @@ export const setAuthorReleasesFilter = createAction(SET_AUTHOR_RELEASES_FILTER);
 // Helpers
 
 const fetchReleasesHelper = createFetchHandler(section, '/release');
+const fetchMangaReleasesHelper = createFetchHandler(section, '/mangasearch');
 
 //
 // Action Handlers
@@ -259,7 +260,10 @@ const fetchReleasesHelper = createFetchHandler(section, '/release');
 export const actionHandlers = handleThunks({
 
   [FETCH_RELEASES]: function(getState, payload, dispatch) {
-    const abortRequest = fetchReleasesHelper(getState, payload, dispatch);
+    // If the payload indicates this is a manga book, use the MangaDex endpoint
+    const abortRequest = payload.isManga
+      ? fetchMangaReleasesHelper(getState, payload, dispatch)
+      : fetchReleasesHelper(getState, payload, dispatch);
 
     abortCurrentRequest = abortRequest;
   },

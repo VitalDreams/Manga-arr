@@ -26,9 +26,13 @@ function createMapStateToProps() {
         );
       });
 
+      // ContentType: 0=Manga, 1=Manhwa, 2=Manhua, 3=Other
+      const isManga = author && (author.contentType === 0 || author.contentType === 1 || author.contentType === 2);
+
       return {
         authorMonitored: author.monitored,
-        isSearching
+        isSearching,
+        isManga
       };
     }
   );

@@ -10,6 +10,7 @@ function BookInteractiveSearchModal(props) {
     bookId,
     bookTitle,
     authorName,
+    isManga,
     onModalClose
   } = props;
 
@@ -24,6 +25,7 @@ function BookInteractiveSearchModal(props) {
         bookId={bookId}
         bookTitle={bookTitle}
         authorName={authorName}
+        isManga={isManga}
         onModalClose={onModalClose}
       />
     </Modal>
@@ -35,6 +37,7 @@ BookInteractiveSearchModal.propTypes = {
   bookId: PropTypes.number.isRequired,
   bookTitle: PropTypes.string.isRequired,
   authorName: PropTypes.string.isRequired,
+  isManga: PropTypes.bool,
   onModalClose: PropTypes.func.isRequired
 };
 

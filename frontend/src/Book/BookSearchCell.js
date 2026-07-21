@@ -40,6 +40,7 @@ class BookSearchCell extends Component {
       bookTitle,
       authorName,
       isSearching,
+      isManga,
       onSearchPress,
       ...otherProps
     } = this.props;
@@ -62,6 +63,7 @@ class BookSearchCell extends Component {
           bookId={bookId}
           bookTitle={bookTitle}
           authorName={authorName}
+          isManga={isManga}
           onModalClose={this.onDetailsModalClose}
           {...otherProps}
         />
@@ -77,6 +79,7 @@ BookSearchCell.propTypes = {
   bookTitle: PropTypes.string.isRequired,
   authorName: PropTypes.string.isRequired,
   isSearching: PropTypes.bool.isRequired,
+  isManga: PropTypes.bool,
   onSearchPress: PropTypes.func.isRequired
 };
 
