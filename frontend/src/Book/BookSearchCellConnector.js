@@ -28,6 +28,7 @@ function createMapStateToProps() {
 
       // ContentType: 0=Manga, 1=Manhwa, 2=Manhua, 3=Other
       const isManga = author && (author.contentType === 'manga' || author.contentType === 'manhwa' || author.contentType === 'manhua');
+      console.log("DEBUG isManga:", isManga, "contentType:", author ? author.contentType : "no author");
 
       return {
         authorMonitored: author.monitored,
