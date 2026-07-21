@@ -9,7 +9,7 @@ import BookSearchCell from './BookSearchCell';
 
 function createMapStateToProps() {
   return createSelector(
-    (state, { bookId }) => bookId,
+    (state, { authorId }) => authorId,
     createAuthorSelector(),
     createCommandsSelector(),
     (bookId, author, commands) => {
