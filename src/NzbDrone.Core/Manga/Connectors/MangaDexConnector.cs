@@ -141,6 +141,38 @@ namespace NzbDrone.Core.Manga.Connectors
             };
         }
 
+        public async Task<Dictionary<string, string>> GetChapterNumbersForVolumeAsync(string foreignMangaId, int volumeNumber)
+        {
+            var url = $"{MangaDexApiUrl}/manga/{foreignMangaId}/aggregate?volume[]={volumeNumber}";
+            var content = await GetRawAsync(url);
+            var json = JObject.Parse(content);
+
+            var chapters = new Dictionary<string, string>();
+            var volumesToken = json["volumes"];
+
+            if (volumesToken is JObject volumesObj)
+            {
+                var volProp = volumesObj.Properties().FirstOrDefault(p => p.Name == volumeNumber.ToString());
+                if (volProp?.Value is JObject volObj)
+                {
+                    var chaptersToken = volObj["chapters"];
+                    if (chaptersToken is JObject chaptersObj)
+                    {
+                        foreach (var chapterProp in chaptersObj.Properties())
+                        {
+                            var id = chapterProp.Value["id"]?.ToString();
+                            if (id != null)
+                            {
+                                chapters[id] = chapterProp.Name;
+                            }
+                        }
+                    }
+                }
+            }
+
+            return chapters;
+        }
+
         public async Task<List<ChapterInfo>> GetChaptersForVolumeAsync(string foreignMangaId, int volumeNumber)
         {
             var url = $"{MangaDexApiUrl}/manga/{foreignMangaId}/feed?volume[]={volumeNumber}&translatedLanguage[]=en&order[chapter]=asc&limit=100";

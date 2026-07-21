@@ -71,31 +71,26 @@ namespace Readarr.Api.V1.Manga
 
                 _logger.Info("Searching MangaDex for manga {0}, volume {1}", foreignMangaId, volumeNumber.Value);
 
-                var chapters = await _mangaDexConnector.GetChaptersForVolumeAsync(foreignMangaId, volumeNumber.Value);
+                var chapters = await _mangaDexConnector.GetChapterNumbersForVolumeAsync(foreignMangaId, volumeNumber.Value);
 
                 var releases = chapters.Select(chapter => new ReleaseResource
                 {
-                    Guid = $"mangadex-{chapter.ForeignChapterId}",
-                    Title = $"{author.Name} - {book.Title} - Ch. {chapter.ChapterNumber}: {chapter.Title}",
+                    Guid = $"mangadex-{chapter.Key}",
+                    Title = $"Vol {volumeNumber.Value} Ch {chapter.Value} (MangaDex)",
                     Quality = new QualityModel(Quality.Unknown),
-                    Size = chapter.PageCount * 500_000L, // Estimate ~500KB per page
-                    IndexerId = -1, // MangaDex virtual indexer
+                    Size = 0,
+                    IndexerId = -1,
                     Indexer = "MangaDex",
-                    ReleaseGroup = chapter.ScanlationGroup ?? "Unknown",
                     AuthorName = author.Name,
                     BookTitle = book.Title,
                     Approved = true,
                     Rejected = false,
                     Rejections = new List<string>(),
-                    PublishDate = chapter.ReleaseDate ?? DateTime.MinValue,
-                    DownloadUrl = $"https://mangadex.org/chapter/{chapter.ForeignChapterId}",
-                    InfoUrl = $"https://mangadex.org/chapter/{chapter.ForeignChapterId}",
+                    DownloadUrl = $"https://mangadex.org/chapter/{chapter.Key}",
+                    InfoUrl = $"https://mangadex.org/chapter/{chapter.Key}",
                     DownloadAllowed = true,
-                    Protocol = DownloadProtocol.Torrent, // MangaDex uses web, but Torrent is the closest
-                    CommentUrl = $"https://mangadex.org/chapter/{chapter.ForeignChapterId}",
-                    Age = chapter.ReleaseDate.HasValue ? (int)(DateTime.UtcNow - chapter.ReleaseDate.Value).TotalDays : 0,
-                    AgeHours = chapter.ReleaseDate.HasValue ? (DateTime.UtcNow - chapter.ReleaseDate.Value).TotalHours : 0,
-                    AgeMinutes = chapter.ReleaseDate.HasValue ? (DateTime.UtcNow - chapter.ReleaseDate.Value).TotalMinutes : 0
+                    Protocol = DownloadProtocol.Torrent,
+                    CommentUrl = $"https://mangadex.org/chapter/{chapter.Key}"
                 }).ToList();
 
                 return Ok(releases);
