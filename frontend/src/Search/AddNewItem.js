@@ -10,6 +10,7 @@ import PageContentBody from 'Components/Page/PageContentBody';
 import { icons, kinds } from 'Helpers/Props';
 import getErrorMessage from 'Utilities/Object/getErrorMessage';
 import translate from 'Utilities/String/translate';
+import AddNewMangaModal from './Manga/AddNewMangaModal';
 import styles from './AddNewItem.css';
 
 class AddNewItem extends Component {
@@ -22,7 +23,9 @@ class AddNewItem extends Component {
 
     this.state = {
       term: props.term || '',
-      isFetching: false
+      isFetching: false,
+      isModalOpen: false,
+      selectedManga: null
     };
   }
 
@@ -71,6 +74,19 @@ class AddNewItem extends Component {
   onClearSearchPress = () => {
     this.setState({ term: '' });
     this.props.onClearSearch();
+  };
+
+  onMangaResultPress = (manga) => {
+    this.setState({
+      selectedManga: manga,
+      isModalOpen: true
+    });
+  };
+
+  onModalClose = () => {
+    this.setState({
+      isModalOpen: false
+    });
   };
 
   //
@@ -242,6 +258,12 @@ class AddNewItem extends Component {
 
           <div />
         </PageContentBody>
+
+        <AddNewMangaModal
+          isOpen={this.state.isModalOpen}
+          foreignMangaId={this.state.selectedManga ? this.state.selectedManga.foreignMangaId : undefined}
+          onModalClose={this.onModalClose}
+        />
       </PageContent>
     );
   }
