@@ -143,7 +143,7 @@ namespace NzbDrone.Core.Manga.Connectors
 
         public async Task<Dictionary<string, string>> GetChapterNumbersForVolumeAsync(string foreignMangaId, int volumeNumber)
         {
-            var url = /manga/{foreignMangaId}/aggregate";
+            var url = $"{MangaDexApiUrl}/manga/{foreignMangaId}/aggregate";
             var content = await GetRawAsync(url);
             var json = JObject.Parse(content);
 
