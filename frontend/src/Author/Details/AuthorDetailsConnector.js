@@ -6,6 +6,7 @@ import { connect } from 'react-redux';
 import { createSelector } from 'reselect';
 import * as commandNames from 'Commands/commandNames';
 import { toggleAuthorMonitored } from 'Store/Actions/authorActions';
+import { clearBookFiles, fetchBookFiles } from 'Store/Actions/bookFileActions';
 import { saveBookEditor } from 'Store/Actions/bookIndexActions';
 import { executeCommand } from 'Store/Actions/commandActions';
 import { clearQueueDetails, fetchQueueDetails } from 'Store/Actions/queueActions';
@@ -203,6 +204,8 @@ function createMapStateToProps() {
 const mapDispatchToProps = {
   fetchSeries,
   clearSeries,
+  fetchBookFiles,
+  clearBookFiles,
   saveBookEditor,
   toggleAuthorMonitored,
   fetchQueueDetails,
@@ -261,12 +264,14 @@ class AuthorDetailsConnector extends Component {
     const authorId = this.props.id;
 
     this.props.fetchSeries({ authorId });
+    this.props.fetchBookFiles({ authorId });
     this.props.fetchQueueDetails({ authorId });
   };
 
   unpopulate = () => {
     this.props.cancelFetchReleases();
     this.props.clearSeries();
+    this.props.clearBookFiles();
     this.props.clearQueueDetails();
     this.props.clearReleases();
   };
@@ -325,6 +330,8 @@ AuthorDetailsConnector.propTypes = {
   isRenamingAuthor: PropTypes.bool.isRequired,
   fetchSeries: PropTypes.func.isRequired,
   clearSeries: PropTypes.func.isRequired,
+  fetchBookFiles: PropTypes.func.isRequired,
+  clearBookFiles: PropTypes.func.isRequired,
   saveBookEditor: PropTypes.func.isRequired,
   toggleAuthorMonitored: PropTypes.func.isRequired,
   fetchQueueDetails: PropTypes.func.isRequired,
