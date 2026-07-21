@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && npm install -g yarn \
     && rm -rf /var/lib/apt/lists/*
 
-# Build frontend (cache-bust: 2026-07-15T00:00:00Z)
+# Build frontend (cache-bust: 2026-07-21T01:32:42T00:00:00Z)
 RUN yarn install --frozen-lockfile --network-timeout 120000
 RUN yarn build
 
