@@ -266,21 +266,33 @@ namespace Readarr.Api.V1.Manga
             }
 
             var books = _bookService.GetBooksByAuthor(id);
+            var authorStats = _authorStatisticsService.AuthorStatistics(id);
+            var bookStatsDict = authorStats?.BookStatistics?.ToDictionary(v => v.BookId);
 
-            return books.Select(b => new BookResource
+            return books.Select(b =>
             {
-                Id = b.Id,
-                Title = b.Title,
-                AuthorId = id,
-                ForeignBookId = b.ForeignBookId,
-                TitleSlug = b.TitleSlug,
-                Monitored = b.Monitored,
-                AnyEditionOk = b.AnyEditionOk,
-                ReleaseDate = b.ReleaseDate,
-                Genres = b.Genres,
-                Ratings = b.Ratings ?? new Ratings(),
-                Added = b.Added,
-                LastSearchTime = b.LastSearchTime
+                var resource = new BookResource
+                {
+                    Id = b.Id,
+                    Title = b.Title,
+                    AuthorId = id,
+                    ForeignBookId = b.ForeignBookId,
+                    TitleSlug = b.TitleSlug,
+                    Monitored = b.Monitored,
+                    AnyEditionOk = b.AnyEditionOk,
+                    ReleaseDate = b.ReleaseDate,
+                    Genres = b.Genres,
+                    Ratings = b.Ratings ?? new Ratings(),
+                    Added = b.Added,
+                    LastSearchTime = b.LastSearchTime
+                };
+
+                if (bookStatsDict != null && bookStatsDict.TryGetValue(b.Id, out var stats))
+                {
+                    resource.Statistics = stats.ToResource();
+                }
+
+                return resource;
             }).ToList();
         }
 
