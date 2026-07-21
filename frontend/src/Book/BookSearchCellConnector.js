@@ -27,7 +27,7 @@ function createMapStateToProps() {
       });
 
       // ContentType: 0=Manga, 1=Manhwa, 2=Manhua, 3=Other
-      const isManga = author && (author.contentType === 0 || author.contentType === 1 || author.contentType === 2);
+      const isManga = author && (author.contentType === 'manga' || author.contentType === 'manhwa' || author.contentType === 'manhua');
 
       return {
         authorMonitored: author.monitored,
