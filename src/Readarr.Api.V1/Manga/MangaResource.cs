@@ -58,6 +58,13 @@ namespace Readarr.Api.V1.Manga
         public int MonitoredVolumes { get; set; }
         public int TotalChapters { get; set; }
         public int DownloadedChapters { get; set; }
+
+        // Fields expected by the frontend (Readarr AuthorStatistics shape)
+        public int BookCount { get; set; }
+        public int BookFileCount { get; set; }
+        public int TotalBookCount { get; set; }
+        public int AvailableBookCount { get; set; }
+        public long SizeOnDisk { get; set; }
     }
 
     public static class MangaResourceMapper

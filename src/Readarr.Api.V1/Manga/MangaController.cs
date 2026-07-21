@@ -77,7 +77,12 @@ namespace Readarr.Api.V1.Manga
                 MonitoredVolumes = books.Count(b => b.Monitored),
                 DownloadedVolumes = 0,
                 TotalChapters = 0,
-                DownloadedChapters = 0
+                DownloadedChapters = 0,
+                BookCount = books.Count,
+                TotalBookCount = books.Count,
+                BookFileCount = 0,
+                AvailableBookCount = 0,
+                SizeOnDisk = 0
             };
 
             // Map cover URL to local path
@@ -106,7 +111,12 @@ namespace Readarr.Api.V1.Manga
                     MonitoredVolumes = books.Count(b => b.Monitored),
                     DownloadedVolumes = 0,
                     TotalChapters = 0,
-                    DownloadedChapters = 0
+                    DownloadedChapters = 0,
+                    BookCount = books.Count,
+                    TotalBookCount = books.Count,
+                    BookFileCount = 0,
+                    AvailableBookCount = 0,
+                    SizeOnDisk = 0
                 };
 
                 MapCoverToLocal(resource);

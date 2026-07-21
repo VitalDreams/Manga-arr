@@ -14,6 +14,7 @@ function createMapStateToProps() {
     (searchState, dimensions) => {
       const {
         isAdding,
+        isAdded,
         addError,
         mangaDefaults
       } = searchState;
@@ -26,6 +27,7 @@ function createMapStateToProps() {
 
       return {
         isAdding,
+        isAdded,
         addError,
         isSmallScreen: dimensions.isSmallScreen,
         validationErrors,
@@ -42,6 +44,15 @@ const mapDispatchToProps = {
 };
 
 class AddNewMangaModalContentConnector extends Component {
+
+  //
+  // Lifecycle
+
+  componentDidUpdate(prevProps) {
+    if (!prevProps.isAdded && this.props.isAdded) {
+      this.props.onModalClose();
+    }
+  }
 
   //
   // Listeners
@@ -88,6 +99,7 @@ AddNewMangaModalContentConnector.propTypes = {
   qualityProfileId: PropTypes.object,
   metadataProfileId: PropTypes.object,
   tags: PropTypes.object.isRequired,
+  isAdded: PropTypes.bool.isRequired,
   onModalClose: PropTypes.func.isRequired,
   setMangaAddDefault: PropTypes.func.isRequired,
   addManga: PropTypes.func.isRequired
