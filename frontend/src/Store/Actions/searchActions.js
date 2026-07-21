@@ -236,6 +236,7 @@ export const actionHandlers = handleThunks({
       tags: payload.tags || [],
       coverUrl: clonedItem.coverUrl || '',
       rootFolderPath: payload.rootFolderPath,
+      path: `${payload.rootFolderPath}/${clonedItem.title}`,
       qualityProfileId: payload.qualityProfileId,
       metadataProfileId: payload.metadataProfileId,
       monitored: true
