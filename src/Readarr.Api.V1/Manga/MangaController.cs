@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using FluentValidation;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Common.Http;
+using NzbDrone.Core.AuthorStats;
 using NzbDrone.Core.Books;
 using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.MediaCover;
@@ -28,6 +29,7 @@ namespace Readarr.Api.V1.Manga
         private readonly IAuthorService _authorService;
         private readonly IAuthorMetadataService _authorMetadataService;
         private readonly IBookService _bookService;
+        private readonly IAuthorStatisticsService _authorStatisticsService;
         private readonly IMangaMetadataConnector _metadataConnector;
         private readonly IMapCoversToLocal _coverMapper;
         private readonly IHttpClient _httpClient;
@@ -37,6 +39,7 @@ namespace Readarr.Api.V1.Manga
             IAuthorService authorService,
             IAuthorMetadataService authorMetadataService,
             IBookService bookService,
+            IAuthorStatisticsService authorStatisticsService,
             IMangaMetadataConnector metadataConnector,
             IMapCoversToLocal coverMapper,
             IHttpClient httpClient,
@@ -47,6 +50,7 @@ namespace Readarr.Api.V1.Manga
             _authorService = authorService;
             _authorMetadataService = authorMetadataService;
             _bookService = bookService;
+            _authorStatisticsService = authorStatisticsService;
             _metadataConnector = metadataConnector;
             _coverMapper = coverMapper;
             _httpClient = httpClient;
@@ -71,18 +75,19 @@ namespace Readarr.Api.V1.Manga
             var books = _bookService.GetBooksByAuthor(id);
             resource.Volumes = books.Select(b => b.ToVolumeResource(id)).ToList();
 
+            var stats = _authorStatisticsService.AuthorStatistics(id);
             resource.Statistics = new MangaStatisticsResource
             {
                 TotalVolumes = books.Count,
                 MonitoredVolumes = books.Count(b => b.Monitored),
-                DownloadedVolumes = 0,
+                DownloadedVolumes = stats.BookFileCount,
                 TotalChapters = 0,
                 DownloadedChapters = 0,
-                BookCount = books.Count,
-                TotalBookCount = books.Count,
-                BookFileCount = 0,
-                AvailableBookCount = 0,
-                SizeOnDisk = 0
+                BookCount = stats.BookCount,
+                TotalBookCount = stats.TotalBookCount,
+                BookFileCount = stats.BookFileCount,
+                AvailableBookCount = stats.AvailableBookCount,
+                SizeOnDisk = stats.SizeOnDisk
             };
 
             // Map cover URL to local path
@@ -96,6 +101,7 @@ namespace Readarr.Api.V1.Manga
         public List<MangaResource> AllManga()
         {
             var allAuthors = _authorService.GetAllAuthors();
+            var allStats = _authorStatisticsService.AuthorStatistics().ToDictionary(x => x.AuthorId);
             var resources = new List<MangaResource>();
 
             foreach (var author in allAuthors)
@@ -105,18 +111,19 @@ namespace Readarr.Api.V1.Manga
                 var books = _bookService.GetBooksByAuthor(author.Id);
                 resource.Volumes = books.Select(b => b.ToVolumeResource(author.Id)).ToList();
 
+                allStats.TryGetValue(author.Id, out var stats);
                 resource.Statistics = new MangaStatisticsResource
                 {
                     TotalVolumes = books.Count,
                     MonitoredVolumes = books.Count(b => b.Monitored),
-                    DownloadedVolumes = 0,
+                    DownloadedVolumes = stats?.BookFileCount ?? 0,
                     TotalChapters = 0,
                     DownloadedChapters = 0,
-                    BookCount = books.Count,
-                    TotalBookCount = books.Count,
-                    BookFileCount = 0,
-                    AvailableBookCount = 0,
-                    SizeOnDisk = 0
+                    BookCount = stats?.BookCount ?? 0,
+                    TotalBookCount = stats?.TotalBookCount ?? 0,
+                    BookFileCount = stats?.BookFileCount ?? 0,
+                    AvailableBookCount = stats?.AvailableBookCount ?? 0,
+                    SizeOnDisk = stats?.SizeOnDisk ?? 0
                 };
 
                 MapCoverToLocal(resource);
