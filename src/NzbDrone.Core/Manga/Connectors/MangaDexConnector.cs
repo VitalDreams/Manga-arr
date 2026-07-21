@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
+using NLog;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Common.Http;
 using Newtonsoft.Json.Linq;
@@ -14,16 +15,19 @@ namespace NzbDrone.Core.Manga.Connectors
     public class MangaDexConnector : IMangaMetadataConnector
     {
         private readonly IHttpClient _httpClient;
+        private readonly Logger _logger;
         private const string MangaDexApiUrl = "https://api.mangadex.org";
         private const int RateLimitDelayMs = 200; // 5 req/s
+        private static readonly TimeSpan ChapterLookupTimeout = TimeSpan.FromSeconds(10);
 
         public string Name => "MangaDex";
         public string BaseUrl => MangaDexApiUrl;
         public bool Enabled { get; set; } = true;
 
-        public MangaDexConnector(IHttpClient httpClient)
+        public MangaDexConnector(IHttpClient httpClient, Logger logger)
         {
             _httpClient = httpClient;
+            _logger = logger;
         }
 
         public async Task<List<MangaSearchResult>> SearchAsync(string query, int limit = 10)
@@ -143,31 +147,40 @@ namespace NzbDrone.Core.Manga.Connectors
 
         public async Task<Dictionary<string, string>> GetChapterNumbersForVolumeAsync(string foreignMangaId, int volumeNumber)
         {
-            var url = $"{MangaDexApiUrl}/manga/{foreignMangaId}/aggregate";
-            var content = await GetRawAsync(url);
-            var json = JObject.Parse(content);
-
             var chapters = new Dictionary<string, string>();
-            var volumesToken = json["volumes"];
 
-            if (volumesToken is JObject volumesObj)
+            try
             {
-                var volProp = volumesObj.Properties().FirstOrDefault(p => p.Name == volumeNumber.ToString());
-                if (volProp?.Value is JObject volObj)
+                var url = $"{MangaDexApiUrl}/manga/{foreignMangaId}/aggregate";
+                var content = await GetRawAsync(url, ChapterLookupTimeout);
+                var json = JObject.Parse(content);
+
+                var volumesToken = json["volumes"];
+
+                if (volumesToken is JObject volumesObj)
                 {
-                    var chaptersToken = volObj["chapters"];
-                    if (chaptersToken is JObject chaptersObj)
+                    var volProp = volumesObj.Properties().FirstOrDefault(p => p.Name == volumeNumber.ToString());
+                    if (volProp?.Value is JObject volObj)
                     {
-                        foreach (var chapterProp in chaptersObj.Properties())
+                        var chaptersToken = volObj["chapters"];
+                        if (chaptersToken is JObject chaptersObj)
                         {
-                            var id = chapterProp.Value["id"]?.ToString();
-                            if (id != null)
+                            foreach (var chapterProp in chaptersObj.Properties())
                             {
-                                chapters[id] = chapterProp.Name;
+                                var id = chapterProp.Value["id"]?.ToString();
+                                if (id != null)
+                                {
+                                    chapters[id] = chapterProp.Name;
+                                }
                             }
                         }
                     }
                 }
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to fetch chapter numbers from MangaDex for manga {0}, volume {1}", foreignMangaId, volumeNumber);
+                return new Dictionary<string, string>();
             }
 
             return chapters;
@@ -237,10 +250,16 @@ namespace NzbDrone.Core.Manga.Connectors
             return Json.Deserialize<T>(response.Content);
         }
 
-        private async Task<string> GetRawAsync(string url)
+        private async Task<string> GetRawAsync(string url, TimeSpan? timeout = null)
         {
             await Task.Delay(RateLimitDelayMs); // Rate limiting
             var request = new HttpRequestBuilder(url).Build();
+
+            if (timeout.HasValue)
+            {
+                request.RequestTimeout = timeout.Value;
+            }
+
             var response = await _httpClient.GetAsync(request);
             return response.Content;
         }

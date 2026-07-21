@@ -98,7 +98,7 @@ namespace Readarr.Api.V1.Manga
             catch (Exception ex)
             {
                 _logger.Error(ex, "MangaDex search failed for book {0}", bookId);
-                return StatusCode(500, $"MangaDex search failed: {ex.Message}");
+                return Ok(new List<ReleaseResource>());
             }
         }
 
