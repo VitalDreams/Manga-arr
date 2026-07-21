@@ -14,7 +14,6 @@ function BookInteractiveSearchModalContent(props) {
     bookId,
     bookTitle,
     authorName,
-    isManga,
     onModalClose
   } = props;
 
@@ -31,8 +30,7 @@ function BookInteractiveSearchModalContent(props) {
         <InteractiveSearchConnector
           type="book"
           searchPayload={{
-            bookId,
-            isManga: !!isManga
+            bookId
           }}
         />
       </ModalBody>
@@ -50,7 +48,6 @@ BookInteractiveSearchModalContent.propTypes = {
   bookId: PropTypes.number.isRequired,
   bookTitle: PropTypes.string.isRequired,
   authorName: PropTypes.string.isRequired,
-  isManga: PropTypes.bool,
   onModalClose: PropTypes.func.isRequired
 };
 

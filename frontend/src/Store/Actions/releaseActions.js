@@ -251,7 +251,6 @@ export const setAuthorReleasesFilter = createAction(SET_AUTHOR_RELEASES_FILTER);
 //
 // Helpers
 
-const fetchReleasesHelper = createFetchHandler(section, '/release');
 const fetchMangaReleasesHelper = createFetchHandler(section, '/mangasearch');
 
 //
@@ -260,10 +259,8 @@ const fetchMangaReleasesHelper = createFetchHandler(section, '/mangasearch');
 export const actionHandlers = handleThunks({
 
   [FETCH_RELEASES]: function(getState, payload, dispatch) {
-    // If the payload indicates this is a manga book, use the MangaDex endpoint
-    const abortRequest = payload.isManga
-      ? fetchMangaReleasesHelper(getState, payload, dispatch)
-      : fetchReleasesHelper(getState, payload, dispatch);
+    // MangaArr is manga-only, so interactive search always goes through MangaDex
+    const abortRequest = fetchMangaReleasesHelper(getState, payload, dispatch);
 
     abortCurrentRequest = abortRequest;
   },
