@@ -23,6 +23,7 @@ function transformMangaToAuthorShape(manga) {
 
   return {
     ...manga,
+    contentType: manga.contentType || 'manga',
     authorName: manga.title,
     authorNameLastFirst: manga.title,
     sortName: manga.sortName || manga.title,
