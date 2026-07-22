@@ -15,6 +15,7 @@ using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.Manga;
 using NzbDrone.Core.Manga.Connectors;
 using NzbDrone.Core.MediaCover;
+using NzbDrone.Core.MediaFiles;
 using NzbDrone.Http.REST.Attributes;
 using NzbDrone.SignalR;
 using Readarr.Api.V1.Books;
@@ -38,6 +39,7 @@ namespace Readarr.Api.V1.Manga
         private readonly IMangaSeriesRepository _mangaSeriesRepository;
         private readonly IMangaMetadataRepository _mangaMetadataRepository;
         private readonly IMangaFileService _mangaFileService;
+        private readonly IMediaFileService _mediaFileService;
         private readonly IVolumeRepository _volumeRepository;
         private readonly Logger _logger;
 
@@ -54,6 +56,7 @@ namespace Readarr.Api.V1.Manga
             IMangaSeriesRepository mangaSeriesRepository,
             IMangaMetadataRepository mangaMetadataRepository,
             IMangaFileService mangaFileService,
+            IMediaFileService mediaFileService,
             IVolumeRepository volumeRepository,
             IBroadcastSignalRMessage signalRBroadcaster,
             Logger logger)
@@ -71,6 +74,7 @@ namespace Readarr.Api.V1.Manga
             _mangaSeriesRepository = mangaSeriesRepository;
             _mangaMetadataRepository = mangaMetadataRepository;
             _mangaFileService = mangaFileService;
+            _mediaFileService = mediaFileService;
             _volumeRepository = volumeRepository;
             _logger = logger;
 
@@ -89,7 +93,13 @@ namespace Readarr.Api.V1.Manga
 
             var resource = author.ToMangaResource();
 
+            EnsureNativeSeries(author, resource);
             var series = ResolveMangaSeries(author);
+            if (series != null)
+            {
+                EnsureMangaFileMigration(author, series);
+                _coverMapper.EnsureMangaCovers(author.Id, series);
+            }
             var nativeVolumes = series == null ? new List<Volume>() : _volumeRepository.FindByMangaSeriesId(series.Id);
             resource.Volumes = nativeVolumes
                 .Select(v => v.ToResource(_mangaFileService.GetFilesByVolume(v.Id)))
@@ -130,8 +140,16 @@ namespace Readarr.Api.V1.Manga
             {
                 var resource = author.ToMangaResource();
 
-                var books = _bookService.GetBooksByAuthor(author.Id);
-                resource.Volumes = books.Select(b => b.ToVolumeResource(author.Id)).ToList();
+                EnsureNativeSeries(author, resource);
+                var series = ResolveMangaSeries(author);
+                if (series != null)
+                {
+                    EnsureMangaFileMigration(author, series);
+                }
+                var nativeVolumes = series == null ? new List<Volume>() : _volumeRepository.FindByMangaSeriesId(series.Id);
+                resource.Volumes = nativeVolumes
+                    .Select(v => v.ToResource(_mangaFileService.GetFilesByVolume(v.Id)))
+                    .ToList();
 
                 allStats.TryGetValue(author.Id, out var stats);
                 resource.Statistics = new MangaStatisticsResource
@@ -182,9 +200,12 @@ namespace Readarr.Api.V1.Manga
 
             var resource = addedAuthor.ToMangaResource();
 
-            // Load the books we just created
-            var books = _bookService.GetBooksByAuthor(addedAuthor.Id);
-            resource.Volumes = books.Select(b => b.ToVolumeResource(addedAuthor.Id)).ToList();
+            EnsureNativeSeries(addedAuthor, resource);
+            var nativeSeries = ResolveMangaSeries(addedAuthor);
+            var nativeVolumes = nativeSeries == null ? new List<Volume>() : _volumeRepository.FindByMangaSeriesId(nativeSeries.Id);
+            resource.Volumes = nativeVolumes
+                .Select(v => v.ToResource(_mangaFileService.GetFilesByVolume(v.Id)))
+                .ToList();
 
             MapCoverToLocal(resource);
 
@@ -468,6 +489,79 @@ namespace Readarr.Api.V1.Manga
             catch (Exception ex)
             {
                 _logger.Error(ex, "Failed to fetch and store volumes for manga {0} (ForeignMangaId: {1})", author.Name, foreignMangaId);
+            }
+        }
+
+        private void EnsureNativeSeries(NzbDrone.Core.Books.Author author, MangaResource resource)
+        {
+            if (ResolveMangaSeries(author) != null || string.IsNullOrEmpty(resource?.ForeignMangaId))
+            {
+                return;
+            }
+
+            try
+            {
+                var volumeMap = FetchVolumeChapterMapAsync(author, resource.ForeignMangaId).GetAwaiter().GetResult();
+                EnsureMangaSeriesAsync(author, resource, volumeMap).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to lazily mirror manga {0} into native tables", author.Name);
+            }
+        }
+
+        private void EnsureMangaFileMigration(NzbDrone.Core.Books.Author author, MangaSeries series)
+        {
+            try
+            {
+                var existingMangaFiles = _mangaFileService.GetFilesBySeries(series.Id);
+                var volumeIdsWithFiles = new HashSet<int>(existingMangaFiles.Select(f => f.VolumeId));
+
+                var volumes = _volumeRepository.FindByMangaSeriesId(series.Id);
+                var volumesNeedingMigration = volumes.Where(v => !volumeIdsWithFiles.Contains(v.Id)).ToList();
+
+                if (volumesNeedingMigration.Count == 0)
+                {
+                    return;
+                }
+
+                var volumeByForeignId = volumesNeedingMigration
+                    .ToDictionary(v => v.ForeignVolumeId);
+
+                var bookFiles = _mediaFileService.GetFilesByAuthor(author.Id);
+
+                foreach (var bookFile in bookFiles)
+                {
+                    var foreignBookId = bookFile.Edition?.Value?.Book?.Value?.ForeignBookId;
+                    if (foreignBookId == null || !volumeByForeignId.TryGetValue(foreignBookId, out var volume))
+                    {
+                        continue;
+                    }
+
+                    // Skip if a MangaFile already exists for this volume (from another source)
+                    if (_mangaFileService.GetFilesByVolume(volume.Id).Any())
+                    {
+                        continue;
+                    }
+
+                    var mangaFile = new MangaFile
+                    {
+                        VolumeId = volume.Id,
+                        MangaSeriesId = series.Id,
+                        Path = bookFile.Path,
+                        FileName = global::System.IO.Path.GetFileName(bookFile.Path),
+                        RelativePath = global::System.IO.Path.GetFileName(bookFile.Path),
+                        Size = bookFile.Size,
+                        AddedAt = bookFile.DateAdded,
+                        IsVolumePack = true
+                    };
+
+                    _mangaFileService.Add(mangaFile);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to migrate legacy BookFiles to MangaFiles for manga {0}", author.Name);
             }
         }
 

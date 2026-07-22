@@ -12,6 +12,7 @@ using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Common.Http;
 using NzbDrone.Core.Books;
 using NzbDrone.Core.Books.Events;
+using NzbDrone.Core.Manga;
 using NzbDrone.Core.MediaCover;
 using NzbDrone.Core.Test.Framework;
 
@@ -120,6 +121,30 @@ namespace NzbDrone.Core.Test.MediaCoverTests
             Subject.ConvertToLocalUrls(6, MediaCoverEntity.Book, covers);
 
             covers.Single().Url.Should().Be("/MediaCover/Books/6/disc" + extension + "?lastWrite=1234");
+        }
+
+        [TestCase(".png")]
+        [TestCase(".jpg")]
+        public void should_convert_manga_cover_urls_to_local(string extension)
+        {
+            var covers = new List<MediaCover.MediaCover>
+                {
+                    new MediaCover.MediaCover
+                    {
+                        Url = "http://dummy.com/test" + extension,
+                        CoverType = MediaCoverTypes.Cover
+                    }
+                };
+
+            Mocker.GetMock<IDiskProvider>().Setup(c => c.FileGetLastWrite(It.IsAny<string>()))
+                  .Returns(new DateTime(1234));
+
+            Mocker.GetMock<IDiskProvider>().Setup(c => c.FileExists(It.IsAny<string>()))
+                  .Returns(true);
+
+            Subject.ConvertToLocalUrls(10, MediaCoverEntity.Manga, covers);
+
+            covers.Single().Url.Should().Be("/MediaCover/Manga/10/cover" + extension + "?lastWrite=1234");
         }
 
         [TestCase(".png")]
@@ -262,6 +287,40 @@ namespace NzbDrone.Core.Test.MediaCoverTests
 
             Mocker.GetMock<IImageResizer>()
                   .Verify(v => v.Resize(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>()), Times.Exactly(2));
+        }
+
+        [Test]
+        public void should_download_manga_cover_to_entity_id_path()
+        {
+            var metadata = new MangaMetadata
+            {
+                ForeignMangaId = "test-manga-id",
+                CoverUrl = "https://uploads.mangadex.org/covers/test.jpg"
+            };
+
+            var mangaSeries = new MangaSeries
+            {
+                Id = 18,
+                Metadata = metadata
+            };
+
+            Mocker.GetMock<IDiskProvider>()
+                  .Setup(v => v.FileExists(It.IsAny<string>()))
+                  .Returns(false);
+
+            Mocker.GetMock<IDiskProvider>()
+                  .Setup(v => v.FolderExists(It.IsAny<string>()))
+                  .Returns(true);
+
+            var entityId = 10;
+
+            Subject.EnsureMangaCovers(entityId, mangaSeries);
+
+            Mocker.GetMock<IHttpClient>()
+                  .Verify(v => v.DownloadFile(
+                      It.IsAny<string>(),
+                      It.Is<string>(p => p.Contains("Manga") && p.Contains(entityId.ToString()) && !p.Contains(mangaSeries.Id.ToString())),
+                      It.IsAny<string>()));
         }
     }
 }

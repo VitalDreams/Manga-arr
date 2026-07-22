@@ -22,6 +22,7 @@ namespace NzbDrone.Core.MediaCover
         void ConvertToLocalUrls(int entityId, MediaCoverEntity coverEntity, IEnumerable<MediaCover> covers);
         string GetCoverPath(int entityId, MediaCoverEntity coverEntity, MediaCoverTypes coverType, string extension, int? height = null);
         void EnsureBookCovers(Book book);
+        void EnsureMangaCovers(int entityId, MangaSeries mangaSeries);
     }
 
     public class MediaCoverService :
@@ -249,7 +250,7 @@ namespace NzbDrone.Core.MediaCover
             }
         }
 
-        public void EnsureMangaCovers(MangaSeries mangaSeries)
+        public void EnsureMangaCovers(int entityId, MangaSeries mangaSeries)
         {
             var coverUrl = mangaSeries.Metadata?.Value?.CoverUrl;
 
@@ -259,7 +260,7 @@ namespace NzbDrone.Core.MediaCover
             }
 
             var cover = new MediaCover(MediaCoverTypes.Cover, coverUrl);
-            var fileName = GetCoverPath(mangaSeries.Id, MediaCoverEntity.Manga, cover.CoverType, cover.Extension, null);
+            var fileName = GetCoverPath(entityId, MediaCoverEntity.Manga, cover.CoverType, cover.Extension, null);
 
             if (_diskProvider.FileExists(fileName) && _diskProvider.GetFileSize(fileName) > 0)
             {
@@ -435,6 +436,12 @@ namespace NzbDrone.Core.MediaCover
             {
                 _diskProvider.DeleteFolder(path, true);
             }
+
+            var mangaPath = GetMangaCoverPath(message.Author.Id);
+            if (_diskProvider.FolderExists(mangaPath))
+            {
+                _diskProvider.DeleteFolder(mangaPath, true);
+            }
         }
 
         public void HandleAsync(BookDeletedEvent message)
@@ -448,7 +455,9 @@ namespace NzbDrone.Core.MediaCover
 
         public void HandleAsync(MangaSeriesAddedEvent message)
         {
-            EnsureMangaCovers(message.Series);
+            // Cover download deferred to first API read where the public entity ID
+            // (Author.Id) is available. The MangaSeriesAddedEvent only carries the
+            // MangaSeries, whose Id differs from the Author.Id used in cover URLs.
         }
 
         public void HandleAsync(MangaSeriesDeletedEvent message)
