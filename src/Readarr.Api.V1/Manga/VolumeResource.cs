@@ -18,6 +18,9 @@ namespace Readarr.Api.V1.Manga
         public bool Monitored { get; set; }
         public DateTime Added { get; set; }
         public int ChapterCount { get; set; }
+        public int MangaFileCount { get; set; }
+        public long SizeOnDisk { get; set; }
+        public bool Available { get; set; }
     }
 
     public static class VolumeResourceMapper
@@ -42,6 +45,16 @@ namespace Readarr.Api.V1.Manga
                 Added = model.Added,
                 ChapterCount = model.Chapters?.Value?.Count ?? 0
             };
+        }
+
+        public static VolumeResource ToResource(this Volume model, IEnumerable<MangaFile> files)
+        {
+            var resource = model.ToResource();
+            var fileList = files?.ToList() ?? new List<MangaFile>();
+            resource.MangaFileCount = fileList.Count;
+            resource.SizeOnDisk = fileList.Sum(f => f.Size);
+            resource.Available = fileList.Count > 0;
+            return resource;
         }
 
         public static List<VolumeResource> ToResource(this IEnumerable<Volume> models)

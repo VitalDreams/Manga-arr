@@ -37,6 +37,8 @@ namespace Readarr.Api.V1.Manga
         private readonly IMangaSeriesService _mangaSeriesService;
         private readonly IMangaSeriesRepository _mangaSeriesRepository;
         private readonly IMangaMetadataRepository _mangaMetadataRepository;
+        private readonly IMangaFileService _mangaFileService;
+        private readonly IVolumeRepository _volumeRepository;
         private readonly Logger _logger;
 
         public MangaController(
@@ -51,6 +53,8 @@ namespace Readarr.Api.V1.Manga
             IMangaSeriesService mangaSeriesService,
             IMangaSeriesRepository mangaSeriesRepository,
             IMangaMetadataRepository mangaMetadataRepository,
+            IMangaFileService mangaFileService,
+            IVolumeRepository volumeRepository,
             IBroadcastSignalRMessage signalRBroadcaster,
             Logger logger)
             : base(signalRBroadcaster)
@@ -66,6 +70,8 @@ namespace Readarr.Api.V1.Manga
             _mangaSeriesService = mangaSeriesService;
             _mangaSeriesRepository = mangaSeriesRepository;
             _mangaMetadataRepository = mangaMetadataRepository;
+            _mangaFileService = mangaFileService;
+            _volumeRepository = volumeRepository;
             _logger = logger;
 
             SharedValidator.RuleFor(s => s.Title).NotEmpty();
@@ -83,15 +89,19 @@ namespace Readarr.Api.V1.Manga
 
             var resource = author.ToMangaResource();
 
-            // Load books (volumes) for this manga
+            var series = ResolveMangaSeries(author);
+            var nativeVolumes = series == null ? new List<Volume>() : _volumeRepository.FindByMangaSeriesId(series.Id);
+            resource.Volumes = nativeVolumes
+                .Select(v => v.ToResource(_mangaFileService.GetFilesByVolume(v.Id)))
+                .ToList();
+
             var books = _bookService.GetBooksByAuthor(id);
-            resource.Volumes = books.Select(b => b.ToVolumeResource(id)).ToList();
 
             var stats = _authorStatisticsService.AuthorStatistics(id);
             resource.Statistics = new MangaStatisticsResource
             {
-                TotalVolumes = books.Count,
-                MonitoredVolumes = books.Count(b => b.Monitored),
+                TotalVolumes = resource.Volumes.Count,
+                MonitoredVolumes = resource.Volumes.Count(v => v.Monitored),
                 DownloadedVolumes = stats.BookFileCount,
                 TotalChapters = 0,
                 DownloadedChapters = 0,
@@ -126,8 +136,8 @@ namespace Readarr.Api.V1.Manga
                 allStats.TryGetValue(author.Id, out var stats);
                 resource.Statistics = new MangaStatisticsResource
                 {
-                    TotalVolumes = books.Count,
-                    MonitoredVolumes = books.Count(b => b.Monitored),
+                    TotalVolumes = resource.Volumes.Count,
+                    MonitoredVolumes = resource.Volumes.Count(v => v.Monitored),
                     DownloadedVolumes = stats?.BookFileCount ?? 0,
                     TotalChapters = 0,
                     DownloadedChapters = 0,
@@ -349,6 +359,8 @@ namespace Readarr.Api.V1.Manga
             var books = _bookService.GetBooksByAuthor(id);
             var authorStats = _authorStatisticsService.AuthorStatistics(id);
             var bookStatsDict = authorStats?.BookStatistics?.ToDictionary(v => v.BookId);
+            var series = ResolveMangaSeries(author);
+            var nativeVolumes = series == null ? new List<Volume>() : _volumeRepository.FindByMangaSeriesId(series.Id);
 
             return books.Select(b =>
             {
@@ -371,6 +383,22 @@ namespace Readarr.Api.V1.Manga
                 if (bookStatsDict != null && bookStatsDict.TryGetValue(b.Id, out var stats))
                 {
                     resource.Statistics = stats.ToResource();
+                }
+
+                var volumeNumber = ExtractVolumeNumber(b.Title) ?? ExtractVolumeNumber(b.ForeignBookId);
+                var nativeVolume = volumeNumber.HasValue
+                    ? nativeVolumes.FirstOrDefault(v => v.VolumeNumber == volumeNumber.Value)
+                    : null;
+                if (nativeVolume != null)
+                {
+                    var mangaFiles = _mangaFileService.GetFilesByVolume(nativeVolume.Id);
+                    resource.Statistics = new BookStatisticsResource
+                    {
+                        BookFileCount = mangaFiles.Count,
+                        BookCount = 1,
+                        TotalBookCount = 1,
+                        SizeOnDisk = mangaFiles.Sum(f => f.Size)
+                    };
                 }
 
                 return resource;
@@ -471,8 +499,10 @@ namespace Readarr.Api.V1.Manga
             try
             {
                 var existingMetadata = _mangaMetadataRepository.FindByForeignMangaId(foreignMangaId);
-                if (existingMetadata != null && _mangaSeriesRepository.FindByMangaMetadataId(existingMetadata.Id) != null)
+                var existingSeries = existingMetadata == null ? null : _mangaSeriesRepository.FindByMangaMetadataId(existingMetadata.Id);
+                if (existingSeries != null)
                 {
+                    await _mangaSeriesService.FetchAndStoreVolumesAsync(existingSeries, volumeMap);
                     return;
                 }
 
@@ -610,9 +640,9 @@ namespace Readarr.Api.V1.Manga
             {
                 var covers = new List<MediaCover>
                 {
-                    new MediaCover(MediaCoverTypes.Poster, resource.CoverUrl)
+                    new MediaCover(MediaCoverTypes.Cover, resource.CoverUrl)
                 };
-                _coverMapper.ConvertToLocalUrls(resource.Id, MediaCoverEntity.Author, covers);
+                _coverMapper.ConvertToLocalUrls(resource.Id, MediaCoverEntity.Manga, covers);
                 resource.CoverUrl = covers[0].Url;
             }
         }
