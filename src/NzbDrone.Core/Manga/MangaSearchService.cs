@@ -367,15 +367,16 @@ namespace NzbDrone.Core.Manga
             }
         }
 
-        private async Task<List<int>> GetWantedVolumesAsync(MangaSeries series)
+        private Task<List<int>> GetWantedVolumesAsync(MangaSeries series)
         {
             // Return volumes 1 through TotalVolumes if known, otherwise just volume 1
             var totalVolumes = series.Metadata?.Value?.TotalVolumes ?? 0;
             if (totalVolumes > 0)
             {
-                return Enumerable.Range(1, totalVolumes).ToList();
+                return Task.FromResult(Enumerable.Range(1, totalVolumes).ToList());
             }
-            return new List<int> { 1 };
+
+            return Task.FromResult(new List<int> { 1 });
         }
     }
 

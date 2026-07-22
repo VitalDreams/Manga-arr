@@ -1,20 +1,20 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using FluentValidation;
+using NLog;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Common.Http;
 using NzbDrone.Core.AuthorStats;
 using NzbDrone.Core.Books;
 using NzbDrone.Core.Datastore.Events;
-using NzbDrone.Core.MediaCover;
-using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Manga;
 using NzbDrone.Core.Manga.Connectors;
-using NLog;
+using NzbDrone.Core.MediaCover;
 using NzbDrone.Http.REST.Attributes;
 using NzbDrone.SignalR;
 using Readarr.Api.V1.Books;
@@ -33,6 +33,10 @@ namespace Readarr.Api.V1.Manga
         private readonly IMangaMetadataConnector _metadataConnector;
         private readonly IMapCoversToLocal _coverMapper;
         private readonly IHttpClient _httpClient;
+        private readonly IMangaSearchService _mangaSearchService;
+        private readonly IMangaSeriesService _mangaSeriesService;
+        private readonly IMangaSeriesRepository _mangaSeriesRepository;
+        private readonly IMangaMetadataRepository _mangaMetadataRepository;
         private readonly Logger _logger;
 
         public MangaController(
@@ -43,6 +47,10 @@ namespace Readarr.Api.V1.Manga
             IMangaMetadataConnector metadataConnector,
             IMapCoversToLocal coverMapper,
             IHttpClient httpClient,
+            IMangaSearchService mangaSearchService,
+            IMangaSeriesService mangaSeriesService,
+            IMangaSeriesRepository mangaSeriesRepository,
+            IMangaMetadataRepository mangaMetadataRepository,
             IBroadcastSignalRMessage signalRBroadcaster,
             Logger logger)
             : base(signalRBroadcaster)
@@ -54,6 +62,10 @@ namespace Readarr.Api.V1.Manga
             _metadataConnector = metadataConnector;
             _coverMapper = coverMapper;
             _httpClient = httpClient;
+            _mangaSearchService = mangaSearchService;
+            _mangaSeriesService = mangaSeriesService;
+            _mangaSeriesRepository = mangaSeriesRepository;
+            _mangaMetadataRepository = mangaMetadataRepository;
             _logger = logger;
 
             SharedValidator.RuleFor(s => s.Title).NotEmpty();
@@ -134,7 +146,7 @@ namespace Readarr.Api.V1.Manga
         }
 
         [RestPostById]
-        public ActionResult<MangaResource> AddManga([FromBody] MangaResource mangaResource)
+        public async Task<ActionResult<MangaResource>> AddManga([FromBody] MangaResource mangaResource)
         {
             // Create AuthorMetadata from manga resource
             var metadata = mangaResource.ToAuthorMetadata();
@@ -148,8 +160,15 @@ namespace Readarr.Api.V1.Manga
 
             var addedAuthor = _authorService.AddAuthor(author, false);
 
+            // Fetch the volume/chapter map from MangaDex once and reuse it for both the Books
+            // mirror (below) and the MangaSeries/Volume mirror, instead of fetching it twice.
+            var volumeMap = await FetchVolumeChapterMapAsync(addedAuthor, mangaResource.ForeignMangaId);
+
             // Fetch volumes from MangaDex and store as Books
-            FetchAndStoreVolumes(addedAuthor, mangaResource.ForeignMangaId);
+            StoreVolumesAsBooks(addedAuthor, mangaResource.ForeignMangaId, volumeMap);
+
+            // Mirror into the manga-native tables so search/download can operate on it
+            await EnsureMangaSeriesAsync(addedAuthor, mangaResource, volumeMap);
 
             var resource = addedAuthor.ToMangaResource();
 
@@ -182,6 +201,7 @@ namespace Readarr.Api.V1.Manga
             {
                 metadata.Images = newMetadata.Images;
             }
+
             _authorMetadataService.Upsert(metadata);
 
             // Update author
@@ -193,6 +213,11 @@ namespace Readarr.Api.V1.Manga
             existing.RootFolderPath = mangaResource.RootFolderPath;
 
             _authorService.UpdateAuthor(existing);
+
+            // Keep the manga-native tables (MangaMetadata/MangaSeries) in sync with the
+            // Author/AuthorMetadata mirror so search and download completion (which operate
+            // on MangaSeries) see the updated root/path, profiles, monitored state and metadata.
+            SyncMangaSeries(existing, mangaResource);
 
             BroadcastResourceChange(ModelAction.Updated, mangaResource);
             return Accepted(mangaResource.Id);
@@ -239,8 +264,30 @@ namespace Readarr.Api.V1.Manga
                 return NotFound();
             }
 
-            // Search is not yet implemented in this backend-only refactor
-            return Ok(new MangaSearchAndDownloadResult());
+            var series = ResolveMangaSeries(author);
+            if (series == null)
+            {
+                return Ok(new MangaSearchAndDownloadResult
+                {
+                    Success = false,
+                    ErrorMessage = "No manga series is registered for this author. Try re-adding the manga."
+                });
+            }
+
+            try
+            {
+                var result = await _mangaSearchService.SearchAndDownloadAsync(series.Id);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Manga search failed for series {0} (ID: {1})", author.Name, id);
+                return Ok(new MangaSearchAndDownloadResult
+                {
+                    Success = false,
+                    ErrorMessage = ex.Message
+                });
+            }
         }
 
         [HttpPost("{id}/search/{volumeId}")]
@@ -252,8 +299,42 @@ namespace Readarr.Api.V1.Manga
                 return NotFound();
             }
 
-            // Search is not yet implemented in this backend-only refactor
-            return Ok(new MangaSearchAndDownloadResult());
+            var book = _bookService.GetBook(volumeId);
+            if (book == null || book.AuthorId != id)
+            {
+                return NotFound($"Volume {volumeId} not found for manga {id}");
+            }
+
+            var volumeNumber = ExtractVolumeNumber(book.Title) ?? ExtractVolumeNumber(book.ForeignBookId);
+            if (!volumeNumber.HasValue)
+            {
+                return BadRequest($"Could not determine volume number from book '{book.Title}'");
+            }
+
+            var series = ResolveMangaSeries(author);
+            if (series == null)
+            {
+                return Ok(new MangaSearchAndDownloadResult
+                {
+                    Success = false,
+                    ErrorMessage = "No manga series is registered for this author. Try re-adding the manga."
+                });
+            }
+
+            try
+            {
+                var result = await _mangaSearchService.SearchAndDownloadAsync(series.Id, volumeNumber.Value);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Manga search failed for series {0} volume {1} (ID: {2})", author.Name, volumeNumber.Value, id);
+                return Ok(new MangaSearchAndDownloadResult
+                {
+                    Success = false,
+                    ErrorMessage = ex.Message
+                });
+            }
         }
 
         [HttpGet("{id}/books")]
@@ -296,21 +377,33 @@ namespace Readarr.Api.V1.Manga
             }).ToList();
         }
 
-        private void FetchAndStoreVolumes(NzbDrone.Core.Books.Author author, string foreignMangaId)
+        private async Task<VolumeChapterMap> FetchVolumeChapterMapAsync(NzbDrone.Core.Books.Author author, string foreignMangaId)
         {
             if (string.IsNullOrEmpty(foreignMangaId))
+            {
+                return null;
+            }
+
+            try
+            {
+                return await _metadataConnector.GetVolumeChapterMapAsync(foreignMangaId);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to fetch volume/chapter map for manga {0} (ForeignMangaId: {1})", author.Name, foreignMangaId);
+                return null;
+            }
+        }
+
+        private void StoreVolumesAsBooks(NzbDrone.Core.Books.Author author, string foreignMangaId, VolumeChapterMap volumeMap)
+        {
+            if (string.IsNullOrEmpty(foreignMangaId) || volumeMap?.VolumeChapters == null || volumeMap.VolumeChapters.Count == 0)
             {
                 return;
             }
 
             try
             {
-                var volumeMap = _metadataConnector.GetVolumeChapterMapAsync(foreignMangaId).GetAwaiter().GetResult();
-                if (volumeMap?.VolumeChapters == null || volumeMap.VolumeChapters.Count == 0)
-                {
-                    return;
-                }
-
                 foreach (var entry in volumeMap.VolumeChapters.OrderBy(v => v.Key))
                 {
                     var volumeNumber = entry.Key;
@@ -348,6 +441,167 @@ namespace Readarr.Api.V1.Manga
             {
                 _logger.Error(ex, "Failed to fetch and store volumes for manga {0} (ForeignMangaId: {1})", author.Name, foreignMangaId);
             }
+        }
+
+        private MangaSeries ResolveMangaSeries(NzbDrone.Core.Books.Author author)
+        {
+            var foreignMangaId = author?.Metadata?.Value?.ForeignAuthorId;
+            if (string.IsNullOrEmpty(foreignMangaId))
+            {
+                return null;
+            }
+
+            var metadata = _mangaMetadataRepository.FindByForeignMangaId(foreignMangaId);
+            if (metadata == null)
+            {
+                return null;
+            }
+
+            return _mangaSeriesRepository.FindByMangaMetadataId(metadata.Id);
+        }
+
+        private async Task EnsureMangaSeriesAsync(NzbDrone.Core.Books.Author author, MangaResource mangaResource, VolumeChapterMap volumeMap)
+        {
+            var foreignMangaId = mangaResource?.ForeignMangaId;
+            if (string.IsNullOrEmpty(foreignMangaId))
+            {
+                return;
+            }
+
+            try
+            {
+                var existingMetadata = _mangaMetadataRepository.FindByForeignMangaId(foreignMangaId);
+                if (existingMetadata != null && _mangaSeriesRepository.FindByMangaMetadataId(existingMetadata.Id) != null)
+                {
+                    return;
+                }
+
+                var mangaMetadata = new MangaMetadata
+                {
+                    ForeignMangaId = foreignMangaId,
+                    Title = mangaResource.Title,
+                    TitleSlug = mangaResource.TitleSlug,
+                    Description = mangaResource.Overview,
+                    Author = mangaResource.Author,
+                    Artist = mangaResource.Artist,
+                    Demographic = mangaResource.Demographic,
+                    Status = mangaResource.Status,
+                    Year = mangaResource.Year,
+                    TotalVolumes = mangaResource.TotalVolumes,
+                    TotalChapters = mangaResource.TotalChapters,
+                    Genres = mangaResource.Genres ?? new List<string>(),
+                    ContentType = ContentType.Manga,
+                    CoverUrl = mangaResource.CoverUrl
+                };
+
+                var series = new MangaSeries
+                {
+                    Metadata = mangaMetadata,
+                    Path = author.Path,
+                    RootFolderPath = author.RootFolderPath,
+                    QualityProfileId = author.QualityProfileId,
+                    MetadataProfileId = author.MetadataProfileId,
+                    Monitored = author.Monitored,
+                    Added = author.Added,
+                    CleanName = author.CleanName
+                };
+
+                var addedSeries = _mangaSeriesService.AddSeries(series);
+                await _mangaSeriesService.FetchAndStoreVolumesAsync(addedSeries, volumeMap);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to mirror manga into MangaSeries for author {0} (ForeignMangaId: {1})", author.Name, foreignMangaId);
+            }
+        }
+
+        private void SyncMangaSeries(NzbDrone.Core.Books.Author author, MangaResource mangaResource)
+        {
+            var foreignMangaId = author?.Metadata?.Value?.ForeignAuthorId;
+            if (string.IsNullOrEmpty(foreignMangaId))
+            {
+                return;
+            }
+
+            try
+            {
+                var existingMetadata = _mangaMetadataRepository.FindByForeignMangaId(foreignMangaId);
+                if (existingMetadata == null)
+                {
+                    return;
+                }
+
+                var series = _mangaSeriesRepository.FindByMangaMetadataId(existingMetadata.Id);
+                if (series == null)
+                {
+                    return;
+                }
+
+                // Mirror the relevant metadata fields (leave fields not exposed on MangaResource,
+                // e.g. DownloadMode, untouched so we don't clobber them with defaults).
+                existingMetadata.Title = mangaResource.Title;
+                existingMetadata.TitleSlug = mangaResource.TitleSlug;
+                existingMetadata.Description = mangaResource.Overview;
+                existingMetadata.Author = mangaResource.Author;
+                existingMetadata.Artist = mangaResource.Artist;
+                existingMetadata.Demographic = mangaResource.Demographic;
+                existingMetadata.Status = mangaResource.Status;
+                existingMetadata.Year = mangaResource.Year;
+                existingMetadata.TotalVolumes = mangaResource.TotalVolumes;
+                existingMetadata.TotalChapters = mangaResource.TotalChapters;
+                existingMetadata.Genres = mangaResource.Genres ?? existingMetadata.Genres;
+
+                if (mangaResource.CoverUrl.IsNotNullOrWhiteSpace())
+                {
+                    existingMetadata.CoverUrl = mangaResource.CoverUrl;
+                }
+
+                series.Metadata = existingMetadata;
+                series.Path = author.Path;
+                series.RootFolderPath = author.RootFolderPath;
+                series.QualityProfileId = author.QualityProfileId;
+                series.MetadataProfileId = author.MetadataProfileId;
+                series.Monitored = author.Monitored;
+                series.MonitorNewItems = author.MonitorNewItems;
+                series.CleanName = author.CleanName;
+
+                _mangaSeriesService.UpdateSeries(series);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to sync MangaSeries for author {0} (ForeignMangaId: {1})", author.Name, foreignMangaId);
+            }
+        }
+
+        private static int? ExtractVolumeNumber(string input)
+        {
+            if (string.IsNullOrEmpty(input))
+            {
+                return null;
+            }
+
+            var patterns = new[]
+            {
+                @"(?:vol\.?|volume)\s*(\d+)",
+                @"_vol(\d+)$",
+                @"^v(\d+)$"
+            };
+
+            foreach (var pattern in patterns)
+            {
+                var match = Regex.Match(input, pattern, RegexOptions.IgnoreCase);
+                if (match.Success && int.TryParse(match.Groups[1].Value, out var vol))
+                {
+                    return vol;
+                }
+            }
+
+            if (int.TryParse(input, out var directVol))
+            {
+                return directVol;
+            }
+
+            return null;
         }
 
         private void MapCoverToLocal(MangaResource resource)

@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Events;
@@ -16,6 +15,7 @@ namespace NzbDrone.Core.Manga
         void Update(MangaFile file);
         void Delete(int id);
         void DeleteByVolume(int volumeId);
+        void DeleteBySeries(int seriesId);
     }
 
     public class MangaFileService : IMangaFileService
@@ -68,6 +68,15 @@ namespace NzbDrone.Core.Manga
         public void DeleteByVolume(int volumeId)
         {
             var files = _repository.GetFilesByVolume(volumeId);
+            foreach (var file in files)
+            {
+                _repository.Delete(file.Id);
+            }
+        }
+
+        public void DeleteBySeries(int seriesId)
+        {
+            var files = _repository.GetFilesBySeries(seriesId);
             foreach (var file in files)
             {
                 _repository.Delete(file.Id);

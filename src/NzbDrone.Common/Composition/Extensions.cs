@@ -35,7 +35,6 @@ namespace NzbDrone.Common.Composition.Extensions
             var knownTypes = new KnownTypes(assemblies.SelectMany(x => x.GetTypes()).ToList());
             container.RegisterInstance(knownTypes);
 
-
             return container;
         }
     }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data.SQLite;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -30,8 +31,8 @@ namespace NzbDrone.Core.Manga.Import
         public int FilesMatched { get; set; }
         public int FilesImported { get; set; }
         public int FilesMoved { get; set; }
-        public List<string> ImportedFiles { get; set; } = new();
-        public List<string> Errors { get; set; } = new();
+        public List<string> ImportedFiles { get; set; } = new List<string>();
+        public List<string> Errors { get; set; } = new List<string>();
     }
 
     public class MangaImportService : IMangaImportService
@@ -255,7 +256,9 @@ namespace NzbDrone.Core.Manga.Import
                             }
                         }
 
-                        // Create MangaFile record
+                        // Create MangaFile record. Only mark as a volume pack when no specific
+                        // chapter number was parsed from the file name - a parsed chapter number
+                        // means this file is a single chapter, not the full volume.
                         var mangaFile = new MangaFile
                         {
                             VolumeId = volume.Id,
@@ -265,7 +268,7 @@ namespace NzbDrone.Core.Manga.Import
                             RelativePath = Path.GetFileName(targetPath),
                             Size = scanned.FileSize,
                             AddedAt = DateTime.UtcNow,
-                            IsVolumePack = true
+                            IsVolumePack = !scanned.ChapterNumber.HasValue
                         };
 
                         _fileService.Add(mangaFile);
@@ -281,8 +284,12 @@ namespace NzbDrone.Core.Manga.Import
                 }
             }
 
-            _logger.Info("Auto-import complete: {0} scanned, {1} matched, {2} imported, {3} moved",
-                result.FilesScanned, result.FilesMatched, result.FilesImported, result.FilesMoved);
+            _logger.Info(
+                "Auto-import complete: {0} scanned, {1} matched, {2} imported, {3} moved",
+                result.FilesScanned,
+                result.FilesMatched,
+                result.FilesImported,
+                result.FilesMoved);
 
             return Task.FromResult(result);
         }
@@ -313,7 +320,23 @@ namespace NzbDrone.Core.Manga.Import
 
             volume.MangaMetadata = new MangaMetadata { Id = series.MangaMetadataId };
 
-            return _volumeRepository.Insert(volume);
+            // ForeignVolumeId is uniquely indexed - a concurrent auto-import pass (or an in-flight
+            // Add-Manga volume fetch) for the same series/volume can race between the lookup above
+            // and this insert. Fall back to the existing row instead of throwing.
+            try
+            {
+                return _volumeRepository.Insert(volume);
+            }
+            catch (SQLiteException)
+            {
+                var raced = _volumeRepository.FindByForeignVolumeId(volume.ForeignVolumeId);
+                if (raced == null)
+                {
+                    throw;
+                }
+
+                return raced;
+            }
         }
 
         private MangaMetadata FetchMetadata(string foreignMangaId)
@@ -415,7 +438,11 @@ namespace NzbDrone.Core.Manga.Import
                 RelativePath = Path.GetFileName(targetPath),
                 Size = scanned.FileSize,
                 AddedAt = DateTime.UtcNow,
-                IsVolumePack = true
+
+                // A file is only a volume pack if it covers the whole volume (no chapter number
+                // was parsed from its name). Files parsed with a specific chapter number
+                // (e.g. 'Berserk Vol.001 Ch.001.cbz') represent a single chapter, not the volume.
+                IsVolumePack = !scanned.ChapterNumber.HasValue
             };
 
             _fileService.Add(mangaFile);

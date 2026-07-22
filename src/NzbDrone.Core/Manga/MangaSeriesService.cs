@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Data.SQLite;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
+using NzbDrone.Core.Books.Events;
 using NzbDrone.Core.Manga.Connectors;
 using NzbDrone.Core.Messaging.Events;
 
@@ -14,15 +17,22 @@ namespace NzbDrone.Core.Manga
         MangaSeries AddSeries(MangaSeries newSeries);
         MangaSeries UpdateSeries(MangaSeries series);
         void DeleteSeries(int seriesId, bool deleteFiles);
-        void FetchAndStoreVolumes(MangaSeries series);
+
+        /// <summary>
+        /// Fetches volumes/chapters for a series and stores them. If <paramref name="volumeMap"/>
+        /// is supplied (e.g. already fetched by the caller for the same ForeignMangaId), it is
+        /// reused instead of issuing a duplicate MangaDex request.
+        /// </summary>
+        Task FetchAndStoreVolumesAsync(MangaSeries series, VolumeChapterMap volumeMap = null);
     }
 
-    public class MangaSeriesService : IMangaSeriesService
+    public class MangaSeriesService : IMangaSeriesService, IHandle<AuthorDeletedEvent>
     {
         private readonly IMangaSeriesRepository _seriesRepository;
         private readonly IMangaMetadataRepository _metadataRepository;
         private readonly IVolumeRepository _volumeRepository;
         private readonly IChapterRepository _chapterRepository;
+        private readonly IMangaFileService _mangaFileService;
         private readonly IMangaMetadataConnector _metadataConnector;
         private readonly ISeriesMetadataGenerator _metadataGenerator;
         private readonly IEventAggregator _eventAggregator;
@@ -33,6 +43,7 @@ namespace NzbDrone.Core.Manga
             IMangaMetadataRepository metadataRepository,
             IVolumeRepository volumeRepository,
             IChapterRepository chapterRepository,
+            IMangaFileService mangaFileService,
             IMangaMetadataConnector metadataConnector,
             ISeriesMetadataGenerator metadataGenerator,
             IEventAggregator eventAggregator,
@@ -42,6 +53,7 @@ namespace NzbDrone.Core.Manga
             _metadataRepository = metadataRepository;
             _volumeRepository = volumeRepository;
             _chapterRepository = chapterRepository;
+            _mangaFileService = mangaFileService;
             _metadataConnector = metadataConnector;
             _metadataGenerator = metadataGenerator;
             _eventAggregator = eventAggregator;
@@ -65,13 +77,39 @@ namespace NzbDrone.Core.Manga
                 newSeries.CleanName = (newSeries.Name ?? string.Empty).ToLowerInvariant().Replace(" ", string.Empty);
             }
 
-            // Persist the MangaMetadata record first so we get a valid Id
+            // Persist the MangaMetadata record first so we get a valid Id. ForeignMangaId is
+            // uniquely indexed, so two concurrent Add-Manga requests for the same manga can race
+            // between the caller's "does it already exist" check and this insert. If we lose that
+            // race, fall back to the row the other request just committed instead of surfacing a
+            // constraint violation to the caller.
             var metadata = newSeries.Metadata?.Value;
             if (metadata != null && !string.IsNullOrEmpty(metadata.ForeignMangaId))
             {
-                metadata = _metadataRepository.Insert(metadata);
+                try
+                {
+                    metadata = _metadataRepository.Insert(metadata);
+                }
+                catch (SQLiteException)
+                {
+                    var existingMetadata = _metadataRepository.FindByForeignMangaId(metadata.ForeignMangaId);
+                    if (existingMetadata == null)
+                    {
+                        throw;
+                    }
+
+                    metadata = existingMetadata;
+                }
+
                 newSeries.MangaMetadataId = metadata.Id;
                 newSeries.Metadata = metadata;
+
+                // MangaSeries.MangaMetadataId has no unique constraint, so re-check right before
+                // inserting to shrink (though not eliminate) the same race window for the series row.
+                var existingSeries = _seriesRepository.FindByMangaMetadataId(metadata.Id);
+                if (existingSeries != null)
+                {
+                    return existingSeries;
+                }
             }
 
             var series = _seriesRepository.Insert(newSeries);
@@ -108,11 +146,75 @@ namespace NzbDrone.Core.Manga
         public void DeleteSeries(int seriesId, bool deleteFiles)
         {
             var series = GetSeries(seriesId);
-            _seriesRepository.Delete(seriesId);
+            if (series == null)
+            {
+                return;
+            }
+
+            RemoveMirroredSeries(series);
+
             _eventAggregator.PublishEvent(new MangaSeriesDeletedEvent(series, deleteFiles));
         }
 
-        public void FetchAndStoreVolumes(MangaSeries series)
+        public void Handle(AuthorDeletedEvent message)
+        {
+            // The manga-native tables (MangaMetadata/MangaSeries/Volume/Chapter/MangaFile) are a
+            // mirror of the Author/Book data used by the manga search/download pipeline. When the
+            // author is deleted these mirrored records must be cleaned up as well, otherwise they
+            // become orphaned and re-adding the same manga later fails/reuses stale data because
+            // MangaMetadata.ForeignMangaId is unique.
+            var foreignMangaId = message.Author?.Metadata?.Value?.ForeignAuthorId;
+            if (string.IsNullOrEmpty(foreignMangaId))
+            {
+                return;
+            }
+
+            var metadata = _metadataRepository.FindByForeignMangaId(foreignMangaId);
+            if (metadata == null)
+            {
+                return;
+            }
+
+            var series = _seriesRepository.FindByMangaMetadataId(metadata.Id);
+
+            if (series != null)
+            {
+                RemoveMirroredSeries(series);
+                _eventAggregator.PublishEvent(new MangaSeriesDeletedEvent(series, message.DeleteFiles));
+            }
+            else
+            {
+                // No MangaSeries row (partial mirror) - still remove the orphaned metadata so the
+                // unique ForeignMangaId index doesn't block re-adding this manga later.
+                _metadataRepository.Delete(metadata.Id);
+            }
+        }
+
+        private void RemoveMirroredSeries(MangaSeries series)
+        {
+            var volumes = _volumeRepository.FindByMangaSeriesId(series.Id);
+
+            foreach (var volume in volumes)
+            {
+                var chapters = _chapterRepository.FindByVolumeId(volume.Id);
+                if (chapters.Count > 0)
+                {
+                    _chapterRepository.DeleteMany(chapters);
+                }
+            }
+
+            _mangaFileService.DeleteBySeries(series.Id);
+
+            if (volumes.Count > 0)
+            {
+                _volumeRepository.DeleteMany(volumes);
+            }
+
+            _seriesRepository.Delete(series.Id);
+            _metadataRepository.Delete(series.MangaMetadataId);
+        }
+
+        public async Task FetchAndStoreVolumesAsync(MangaSeries series, VolumeChapterMap volumeMap = null)
         {
             var foreignMangaId = series.ForeignMangaId;
             if (string.IsNullOrEmpty(foreignMangaId))
@@ -125,8 +227,13 @@ namespace NzbDrone.Core.Manga
 
             try
             {
-                // Get volume-to-chapter mapping from MangaDex
-                var volumeMap = _metadataConnector.GetVolumeChapterMapAsync(foreignMangaId).GetAwaiter().GetResult();
+                // Reuse a caller-supplied volume/chapter map (e.g. already fetched while adding the
+                // manga) instead of issuing a duplicate MangaDex request for the same data.
+                if (volumeMap == null)
+                {
+                    volumeMap = await _metadataConnector.GetVolumeChapterMapAsync(foreignMangaId);
+                }
+
                 if (volumeMap?.VolumeChapters == null || volumeMap.VolumeChapters.Count == 0)
                 {
                     _logger.Warn("No volumes found on MangaDex for {0}", foreignMangaId);
@@ -151,19 +258,38 @@ namespace NzbDrone.Core.Manga
                         Monitored = true,
                         AnyEditionOk = true,
                         Added = DateTime.UtcNow,
-                        MangaMetadataId = series.MangaMetadataId
+                        MangaMetadataId = series.MangaMetadataId,
+                        MangaSeriesId = series.Id
                     };
 
                     volume.MangaSeries = new MangaSeries { Id = series.Id };
                     volume.MangaMetadata = new MangaMetadata { Id = series.MangaMetadataId };
 
-                    volume = _volumeRepository.Insert(volume);
+                    // ForeignVolumeId is uniquely indexed - a concurrent fetch for the same series
+                    // (e.g. a duplicate Add-Manga request) can race here. Fall back to the existing
+                    // row rather than failing the whole import.
+                    try
+                    {
+                        volume = _volumeRepository.Insert(volume);
+                    }
+                    catch (SQLiteException)
+                    {
+                        var existingVolume = _volumeRepository.FindByForeignVolumeId(volume.ForeignVolumeId);
+                        if (existingVolume == null)
+                        {
+                            throw;
+                        }
+
+                        _logger.Debug("Volume {0} already exists for series {1}, reusing existing record", volume.ForeignVolumeId, series.Name);
+                        volume = existingVolume;
+                    }
+
                     volumeCount++;
 
                     // Fetch and store chapters for this volume
                     try
                     {
-                        var chapters = _metadataConnector.GetChaptersForVolumeAsync(foreignMangaId, volumeNumber).GetAwaiter().GetResult();
+                        var chapters = await _metadataConnector.GetChaptersForVolumeAsync(foreignMangaId, volumeNumber);
                         if (chapters != null)
                         {
                             foreach (var chapterInfo in chapters)

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -9,6 +10,7 @@ using NLog;
 using NzbDrone.Common.Disk;
 using NzbDrone.Core.Download;
 using NzbDrone.Core.Manga.Connectors;
+using NzbDrone.Core.Parser;
 
 namespace NzbDrone.Core.Manga.Download
 {
@@ -24,6 +26,8 @@ namespace NzbDrone.Core.Manga.Download
         private readonly ICbzCreator _cbzCreator;
         private readonly IMangaNamingService _namingService;
         private readonly IMangaFileService _mangaFileService;
+        private readonly IMangaSeriesService _seriesService;
+        private readonly IVolumeRepository _volumeRepository;
         private readonly IVolumePackTracker _volumePackTracker;
         private readonly IKomgaIntegration _komga;
         private readonly IMangaMetadataConnector _metadataConnector;
@@ -43,6 +47,8 @@ namespace NzbDrone.Core.Manga.Download
             ICbzCreator cbzCreator,
             IMangaNamingService namingService,
             IMangaFileService mangaFileService,
+            IMangaSeriesService seriesService,
+            IVolumeRepository volumeRepository,
             IVolumePackTracker volumePackTracker,
             IKomgaIntegration komga,
             IMangaMetadataConnector metadataConnector,
@@ -54,6 +60,8 @@ namespace NzbDrone.Core.Manga.Download
             _cbzCreator = cbzCreator;
             _namingService = namingService;
             _mangaFileService = mangaFileService;
+            _seriesService = seriesService;
+            _volumeRepository = volumeRepository;
             _volumePackTracker = volumePackTracker;
             _komga = komga;
             _metadataConnector = metadataConnector;
@@ -144,12 +152,32 @@ namespace NzbDrone.Core.Manga.Download
                 return;
             }
 
-            // Parse the manga title to extract series/volume info
+            // Parse the manga title to extract naming hints only (series/volume/chapter numbers).
+            // Actual series/volume records must be resolved from the library, never fabricated here.
             var parseResult = ParseMangaTitle(download.Title);
 
             if (parseResult == null)
             {
-                _logger.Warn("Could not parse manga info from title: {0}", download.Title);
+                _logger.Warn("Could not parse manga title, cannot process: {0}", download.Title);
+                return;
+            }
+
+            var series = FindMatchingSeries(parseResult);
+
+            if (series == null)
+            {
+                _logger.Warn("No matching library series found for download: {0}", download.Title);
+                return;
+            }
+
+            var volume = FindVolume(series, parseResult.VolumeNumber);
+
+            if (volume == null)
+            {
+                _logger.Warn("No matching volume {0} found for series {1}, cannot process download: {2}",
+                    parseResult.VolumeNumber,
+                    series.Name,
+                    download.Title);
                 return;
             }
 
@@ -167,7 +195,7 @@ namespace NzbDrone.Core.Manga.Download
             // Process each file: move to library and update DB
             foreach (var filePath in downloadedFiles)
             {
-                await ProcessDownloadedFileAsync(filePath, parseResult, download);
+                await ProcessDownloadedFileAsync(filePath, parseResult, series, volume);
             }
 
             // Trigger Komga library scan
@@ -182,7 +210,8 @@ namespace NzbDrone.Core.Manga.Download
         private async Task ProcessDownloadedFileAsync(
             string filePath,
             MangaTitleParseResult parseResult,
-            MangaDownloadStatus download)
+            MangaSeries series,
+            Volume volume)
         {
             var fileName = Path.GetFileName(filePath);
 
@@ -192,11 +221,11 @@ namespace NzbDrone.Core.Manga.Download
 
             if (fileName.EndsWith(".cbz", StringComparison.OrdinalIgnoreCase))
             {
-                finalCbzPath = await MoveCbzToLibrary(filePath, parseResult);
+                finalCbzPath = MoveCbzToLibrary(filePath, series);
             }
             else
             {
-                finalCbzPath = await ConvertAndMoveToLibrary(filePath, parseResult);
+                finalCbzPath = await ConvertAndMoveToLibrary(filePath, parseResult, series, volume);
             }
 
             if (finalCbzPath == null)
@@ -205,18 +234,20 @@ namespace NzbDrone.Core.Manga.Download
                 return;
             }
 
-            // Create MangaFile record
+            // Create MangaFile record. The download title only tells us this is a full volume pack
+            // when it didn't include a specific chapter number - a parsed chapter number means the
+            // download is a single chapter, not the whole volume.
             var fileInfo = new FileInfo(finalCbzPath);
             var mangaFile = new MangaFile
             {
-                VolumeId = parseResult.VolumeId,
-                MangaSeriesId = parseResult.SeriesId,
+                VolumeId = volume.Id,
+                MangaSeriesId = series.Id,
                 Path = finalCbzPath,
                 FileName = Path.GetFileName(finalCbzPath),
                 RelativePath = Path.GetFileName(finalCbzPath),
                 Size = fileInfo.Exists ? fileInfo.Length : 0,
                 AddedAt = DateTime.UtcNow,
-                IsVolumePack = true
+                IsVolumePack = !parseResult.ChapterNumber.HasValue
             };
 
             _mangaFileService.Add(mangaFile);
@@ -226,9 +257,10 @@ namespace NzbDrone.Core.Manga.Download
         /// <summary>
         /// Move a CBZ file to the manga library
         /// </summary>
-        private async Task<string> MoveCbzToLibrary(string sourcePath, MangaTitleParseResult parseResult)
+        private string MoveCbzToLibrary(string sourcePath, MangaSeries series)
         {
-            var targetDir = Path.Combine(parseResult.RootFolderPath, parseResult.SeriesFolder);
+            var seriesFolder = _namingService.GetSeriesFolder(series);
+            var targetDir = Path.Combine(series.RootFolderPath, seriesFolder);
             _diskProvider.EnsureFolder(targetDir);
 
             var targetPath = Path.Combine(targetDir, Path.GetFileName(sourcePath));
@@ -255,9 +287,14 @@ namespace NzbDrone.Core.Manga.Download
         /// <summary>
         /// Convert downloaded files to CBZ and move to library
         /// </summary>
-        private async Task<string> ConvertAndMoveToLibrary(string sourcePath, MangaTitleParseResult parseResult)
+        private async Task<string> ConvertAndMoveToLibrary(
+            string sourcePath,
+            MangaTitleParseResult parseResult,
+            MangaSeries series,
+            Volume volume)
         {
-            var targetDir = Path.Combine(parseResult.RootFolderPath, parseResult.SeriesFolder);
+            var seriesFolder = _namingService.GetSeriesFolder(series);
+            var targetDir = Path.Combine(series.RootFolderPath, seriesFolder);
             _diskProvider.EnsureFolder(targetDir);
 
             // Collect image files from the download
@@ -269,23 +306,11 @@ namespace NzbDrone.Core.Manga.Download
                 return null;
             }
 
-            // Create a temporary chapter for CBZ creation
+            // Create a temporary chapter for CBZ creation (chapter number is a naming hint only)
             var chapter = new Chapter
             {
                 ChapterNumber = parseResult.ChapterNumber ?? 0,
                 Language = "en"
-            };
-
-            var volume = new Volume
-            {
-                VolumeNumber = parseResult.VolumeNumber,
-                Title = $"Volume {parseResult.VolumeNumber}"
-            };
-
-            var series = new MangaSeries
-            {
-                Name = parseResult.SeriesTitle,
-                ForeignMangaId = parseResult.ForeignMangaId ?? "unknown"
             };
 
             try
@@ -378,6 +403,49 @@ namespace NzbDrone.Core.Manga.Download
         }
 
         /// <summary>
+        /// Find the existing library series that matches the parsed series title.
+        /// Uses the same clean-name normalization (Parser.CleanAuthorName) applied on both the
+        /// parsed release title and the stored series clean name, so differences in punctuation,
+        /// separators, brackets and whitespace between release titles and library names don't
+        /// cause a completed download to silently go unmatched. Falls back to the immutable
+        /// ForeignMangaId only when the parsed download data actually carried one - it is never
+        /// fabricated here.
+        /// </summary>
+        private MangaSeries FindMatchingSeries(MangaTitleParseResult parseResult)
+        {
+            var cleanSeriesTitle = (parseResult.SeriesTitle ?? string.Empty).CleanAuthorName();
+
+            var allSeries = _seriesService.GetAllSeries();
+
+            var match = allSeries.FirstOrDefault(s => !string.IsNullOrEmpty(s.CleanName) &&
+                                                        s.CleanName.CleanAuthorName().Equals(cleanSeriesTitle, StringComparison.OrdinalIgnoreCase));
+
+            if (match != null)
+            {
+                return match;
+            }
+
+            if (string.IsNullOrEmpty(parseResult.ForeignMangaId))
+            {
+                return null;
+            }
+
+            return allSeries.FirstOrDefault(s => !string.IsNullOrEmpty(s.ForeignMangaId) &&
+                                                  s.ForeignMangaId.Equals(parseResult.ForeignMangaId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// Find the existing volume record for the resolved series.
+        /// Completion must not create synthetic metadata records; the add/import pipeline owns
+        /// volume creation and supplies the canonical ForeignVolumeId.
+        /// </summary>
+        private Volume FindVolume(MangaSeries series, int volumeNumber)
+        {
+            return _volumeRepository.All()
+                .FirstOrDefault(v => v.MangaMetadataId == series.MangaMetadataId && v.VolumeNumber == volumeNumber);
+        }
+
+        /// <summary>
         /// Check if a download title indicates a manga download
         /// </summary>
         private bool IsMangaDownload(string title)
@@ -437,6 +505,7 @@ namespace NzbDrone.Core.Manga.Download
             {
                 seriesTitle = seriesTitle.Substring(0, volIndex).Trim();
             }
+
             var chIndex = seriesTitle.IndexOf("Ch", StringComparison.OrdinalIgnoreCase);
             if (chIndex > 0)
             {
@@ -445,6 +514,18 @@ namespace NzbDrone.Core.Manga.Download
 
             result.SeriesTitle = seriesTitle;
             result.SeriesFolder = _namingService.GetSeriesFolder(new MangaSeries { Name = seriesTitle });
+
+            // If the raw title carries our own immutable MangaDex identifier (embedded via
+            // MangaDownloadService's release Guid convention, e.g. "manga-arr-{id}-vol1"), extract
+            // it so FindMatchingSeries can use it as a safe fallback. Never fabricate this value -
+            // if it isn't present in the parsed data, ForeignMangaId stays null.
+            var foreignIdMatch = System.Text.RegularExpressions.Regex.Match(
+                title, @"manga-arr-(?<id>[^-\s]+)-vol\d+", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            if (foreignIdMatch.Success)
+            {
+                result.ForeignMangaId = foreignIdMatch.Groups["id"].Value;
+            }
 
             return result;
         }
@@ -460,9 +541,6 @@ namespace NzbDrone.Core.Manga.Download
         public string SeriesFolder { get; set; }
         public int VolumeNumber { get; set; }
         public int? ChapterNumber { get; set; }
-        public int SeriesId { get; set; }
-        public int VolumeId { get; set; }
-        public string RootFolderPath { get; set; }
         public string ForeignMangaId { get; set; }
     }
 }
