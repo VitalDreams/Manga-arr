@@ -58,7 +58,7 @@ namespace NzbDrone.Core.Manga
 
             // Register manga download services (Phase 7)
             container.Register<IMangaDownloadService, MangaDownloadService>(Reuse.Singleton);
-            container.Register<IHostedService, MangaDownloadCompletionHandler>(Reuse.Singleton, serviceKey: "MangaDownloadCompletionHandler");
+            // MangaDownloadCompletionHandler auto-registered by AutoAddServices as IHostedService
 
             // Register Komga integration
             container.Register<IKomgaIntegration, KomgaIntegration>(Reuse.Singleton);
@@ -70,7 +70,7 @@ namespace NzbDrone.Core.Manga
             container.Register<IMangaSearchService, MangaSearchService>(Reuse.Singleton);
 
             // Register monitoring service (Phase 9 - background monitoring with dual-source download)
-            container.Register<IHostedService, MangaMonitoringService>(Reuse.Singleton, serviceKey: "MangaMonitoringService");
+            // MangaMonitoringService auto-registered by AutoAddServices as IHostedService
 
             return container;
         }

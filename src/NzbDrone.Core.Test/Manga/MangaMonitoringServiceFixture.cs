@@ -1,8 +1,11 @@
 using System.Collections.Generic;
+using System.Linq;
+using Microsoft.Extensions.Hosting;
 using Moq;
 using NUnit.Framework;
 using NzbDrone.Core.Manga;
 using NzbDrone.Core.Manga.Connectors;
+using NzbDrone.Core.Manga.Download;
 using NzbDrone.Core.Manga.Monitoring;
 using NzbDrone.Core.Test.Framework;
 using NzbDrone.Test.Common;
@@ -26,6 +29,24 @@ namespace NzbDrone.Core.Test.Manga
             // This is a regression test for the monitoring improvement that skips
             // already-downloaded volumes.
             Assert.That(Subject, Is.Not.Null);
+        }
+
+        [Test]
+        public void monitoring_service_should_be_background_service()
+        {
+            // Verify MangaMonitoringService extends BackgroundService (IHostedService)
+            Assert.That(Subject, Is.InstanceOf<BackgroundService>());
+            Assert.That(Subject, Is.InstanceOf<IHostedService>());
+        }
+
+        [Test]
+        public void manga_download_completion_handler_should_be_background_service()
+        {
+            // Verify MangaDownloadCompletionHandler also extends BackgroundService
+            // Both services should be auto-registered by AutoAddServices, not manually
+            var handler = Mocker.Resolve<MangaDownloadCompletionHandler>();
+            Assert.That(handler, Is.InstanceOf<BackgroundService>());
+            Assert.That(handler, Is.InstanceOf<IHostedService>());
         }
     }
 }

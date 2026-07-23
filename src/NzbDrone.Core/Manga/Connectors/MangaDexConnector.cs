@@ -188,7 +188,17 @@ namespace NzbDrone.Core.Manga.Connectors
 
         public async Task<List<ChapterInfo>> GetChaptersForVolumeAsync(string foreignMangaId, int volumeNumber)
         {
-            var url = $"{MangaDexApiUrl}/manga/{foreignMangaId}/feed?volume[]={volumeNumber}&translatedLanguage[]=en&order[chapter]=asc&limit=100";
+            // MangaDex /feed does not support volume[] filter; use aggregate to get chapter IDs first
+            var chapterNumbers = await GetChapterNumbersForVolumeAsync(foreignMangaId, volumeNumber);
+
+            if (chapterNumbers.Count == 0)
+            {
+                return new List<ChapterInfo>();
+            }
+
+            var chapterIds = chapterNumbers.Keys.ToList();
+            var idsParam = string.Join("&", chapterIds.Select(id => $"ids[]={id}"));
+            var url = $"{MangaDexApiUrl}/manga/{foreignMangaId}/feed?{idsParam}&translatedLanguage[]=en&order[chapter]=asc&limit=100";
 
             var response = await GetAsync<MangaDexResponse<MangaDexChapter>>(url);
 
@@ -202,7 +212,7 @@ namespace NzbDrone.Core.Manga.Connectors
                 ScanlationGroup = c.Relationships?.FirstOrDefault(r => r.Type == "scanlation_group")?.Attributes?.Name,
                 PageCount = c.Attributes?.Pages ?? 0,
                 ReleaseDate = c.Attributes?.PublishAt
-            }).ToList();
+            }).ToList() ?? new List<ChapterInfo>();
         }
 
         public async Task<ChapterPages> GetChapterPagesAsync(string foreignChapterId)
