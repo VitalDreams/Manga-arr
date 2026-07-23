@@ -105,7 +105,7 @@ namespace NzbDrone.Core.Manga.Connectors
 
         public async Task<VolumeChapterMap> GetVolumeChapterMapAsync(string foreignMangaId)
         {
-            var url = $"{MangaDexApiUrl}/manga/{foreignMangaId}/aggregate";
+            var url = $"{MangaDexApiUrl}/manga/{foreignMangaId}/aggregate?translatedLanguage[]=en";
             var content = await GetRawAsync(url);
             var json = JObject.Parse(content);
 
@@ -151,7 +151,7 @@ namespace NzbDrone.Core.Manga.Connectors
 
             try
             {
-                var url = $"{MangaDexApiUrl}/manga/{foreignMangaId}/aggregate";
+                var url = $"{MangaDexApiUrl}/manga/{foreignMangaId}/aggregate?translatedLanguage[]=en";
                 var content = await GetRawAsync(url, ChapterLookupTimeout);
                 var json = JObject.Parse(content);
 
