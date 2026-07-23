@@ -198,7 +198,8 @@ namespace NzbDrone.Core.Manga.Connectors
 
             var chapterIds = chapterNumbers.Keys.ToList();
             var idsParam = string.Join("&", chapterIds.Select(id => $"ids[]={id}"));
-            var url = $"{MangaDexApiUrl}/manga/{foreignMangaId}/feed?{idsParam}&translatedLanguage[]=en&order[chapter]=asc&limit=100";
+            // MangaDex /feed does not support ids[] filter; use /chapter endpoint instead
+            var url = $"{MangaDexApiUrl}/chapter?{idsParam}&translatedLanguage[]=en&order[chapter]=asc&limit=100";
 
             var response = await GetAsync<MangaDexResponse<MangaDexChapter>>(url);
 

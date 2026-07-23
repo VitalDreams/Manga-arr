@@ -13,7 +13,7 @@ namespace NzbDrone.Core.Test.Manga
     public class MangaDexConnectorFixture : CoreTest<MangaDexConnector>
     {
         [Test]
-        public async Task get_chapters_for_volume_should_use_aggregate_then_feed_with_ids()
+        public async Task get_chapters_for_volume_should_use_aggregate_then_chapter_endpoint_with_ids()
         {
             var foreignMangaId = "29c42e49-d6f5-4084-9cec-771f5660c90f";
             var volumeNumber = 27;
@@ -30,8 +30,8 @@ namespace NzbDrone.Core.Test.Manga
                 }
             }";
 
-            // Mock feed endpoint response
-            var feedJson = @"{
+            // Mock chapter endpoint response (not /feed, which doesn't support ids[])
+            var chapterJson = @"{
                 ""data"": [
                     {
                         ""id"": ""chapter-id-100"",
@@ -59,16 +59,18 @@ namespace NzbDrone.Core.Test.Manga
                 .ReturnsAsync(new HttpResponse(new HttpRequest(""), new HttpHeader(), aggregateJson));
 
             Mocker.GetMock<IHttpClient>()
-                .Setup(x => x.GetAsync(It.Is<HttpRequest>(r => r.Url.FullUri.Contains("/feed"))))
-                .ReturnsAsync(new HttpResponse(new HttpRequest(""), new HttpHeader(), feedJson));
+                .Setup(x => x.GetAsync(It.Is<HttpRequest>(r => r.Url.FullUri.Contains("/chapter") && !r.Url.FullUri.Contains("/aggregate"))))
+                .ReturnsAsync(new HttpResponse(new HttpRequest(""), new HttpHeader(), chapterJson));
 
             var result = await Subject.GetChaptersForVolumeAsync(foreignMangaId, volumeNumber);
 
-            // Verify the feed URL uses ids[] parameter, not volume[]
+            // Verify the chapter URL uses /chapter endpoint with ids[] parameter (not /feed which rejects ids[])
             Mocker.GetMock<IHttpClient>()
                 .Verify(x => x.GetAsync(It.Is<HttpRequest>(r =>
+                    r.Url.FullUri.Contains("/chapter?") &&
                     r.Url.FullUri.Contains("ids[]=chapter-id-100") &&
                     r.Url.FullUri.Contains("ids[]=chapter-id-101") &&
+                    !r.Url.FullUri.Contains("/manga/") &&
                     !r.Url.FullUri.Contains("volume[]="))), Times.Once);
 
             Assert.That(result, Has.Count.EqualTo(2));
@@ -92,9 +94,9 @@ namespace NzbDrone.Core.Test.Manga
 
             var result = await Subject.GetChaptersForVolumeAsync(foreignMangaId, volumeNumber);
 
-            // Should not call feed endpoint at all
+            // Should not call chapter endpoint at all (volume doesn't exist)
             Mocker.GetMock<IHttpClient>()
-                .Verify(x => x.GetAsync(It.Is<HttpRequest>(r => r.Url.FullUri.Contains("/feed"))), Times.Never);
+                .Verify(x => x.GetAsync(It.Is<HttpRequest>(r => r.Url.FullUri.Contains("/chapter"))), Times.Never);
 
             Assert.That(result, Is.Empty);
         }
