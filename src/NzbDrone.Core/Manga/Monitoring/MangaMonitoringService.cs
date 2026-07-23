@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using NLog;
 using NzbDrone.Core.Manga.Connectors;
+using NzbDrone.Core.Manga.Import;
 
 namespace NzbDrone.Core.Manga.Monitoring
 {
@@ -16,6 +17,7 @@ namespace NzbDrone.Core.Manga.Monitoring
         private readonly IMetadataAggregator _metadataAggregator;
         private readonly IMangaSearchService _searchService;
         private readonly IKomgaIntegration _komga;
+        private readonly IMangaImportService _importService;
         private readonly Logger _logger;
 
         public TimeSpan CheckInterval { get; set; } = TimeSpan.FromHours(24);
@@ -28,6 +30,7 @@ namespace NzbDrone.Core.Manga.Monitoring
             IMetadataAggregator metadataAggregator,
             IMangaSearchService searchService,
             IKomgaIntegration komga,
+            IMangaImportService importService,
             Logger logger)
         {
             _seriesService = seriesService;
@@ -36,12 +39,15 @@ namespace NzbDrone.Core.Manga.Monitoring
             _metadataAggregator = metadataAggregator;
             _searchService = searchService;
             _komga = komga;
+            _importService = importService;
             _logger = logger;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.Info("Manga monitoring service started (interval: {0})", CheckInterval);
+
+            ReconcileExistingSeries();
 
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -68,6 +74,36 @@ namespace NzbDrone.Core.Manga.Monitoring
             }
 
             _logger.Info("Manga monitoring service stopped");
+        }
+
+        private void ReconcileExistingSeries()
+        {
+            try
+            {
+                var allSeries = _seriesService.GetAllSeries();
+                var totalReconciled = 0;
+
+                foreach (var series in allSeries)
+                {
+                    try
+                    {
+                        totalReconciled += _importService.ReconcileSeries(series);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error(ex, "Error reconciling series {0} (ID: {1}) at startup", series.Name, series.Id);
+                    }
+                }
+
+                if (totalReconciled > 0)
+                {
+                    _logger.Info("Startup reconciliation: matched {0} on-disk file(s) to existing series", totalReconciled);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error during startup reconciliation");
+            }
         }
 
         private async Task CheckForNewChaptersAsync()
