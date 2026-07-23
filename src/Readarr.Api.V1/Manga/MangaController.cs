@@ -14,6 +14,7 @@ using NzbDrone.Core.Books;
 using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.Manga;
 using NzbDrone.Core.Manga.Connectors;
+using NzbDrone.Core.Manga.Import;
 using NzbDrone.Core.MediaCover;
 using NzbDrone.Core.MediaFiles;
 using NzbDrone.Core.Parser;
@@ -43,6 +44,7 @@ namespace Readarr.Api.V1.Manga
         private readonly IMediaFileService _mediaFileService;
         private readonly IVolumeRepository _volumeRepository;
         private readonly IMangaFileMigrationService _mangaFileMigrationService;
+        private readonly IMangaImportService _importService;
         private readonly Logger _logger;
 
         public MangaController(
@@ -61,6 +63,7 @@ namespace Readarr.Api.V1.Manga
             IMediaFileService mediaFileService,
             IVolumeRepository volumeRepository,
             IMangaFileMigrationService mangaFileMigrationService,
+            IMangaImportService importService,
             IBroadcastSignalRMessage signalRBroadcaster,
             Logger logger)
             : base(signalRBroadcaster)
@@ -80,6 +83,7 @@ namespace Readarr.Api.V1.Manga
             _mediaFileService = mediaFileService;
             _volumeRepository = volumeRepository;
             _mangaFileMigrationService = mangaFileMigrationService;
+            _importService = importService;
             _logger = logger;
 
             SharedValidator.RuleFor(s => s.Title).NotEmpty();
@@ -102,6 +106,7 @@ namespace Readarr.Api.V1.Manga
             if (series != null)
             {
                 EnsureMangaFileMigration(author, series);
+                _importService.ReconcileSeries(series);
                 _coverMapper.EnsureMangaCovers(author.Id, series);
             }
             var nativeVolumes = series == null ? new List<Volume>() : _volumeRepository.FindByMangaSeriesId(series.Id);
@@ -149,6 +154,7 @@ namespace Readarr.Api.V1.Manga
                 if (series != null)
                 {
                     EnsureMangaFileMigration(author, series);
+                    _importService.ReconcileSeries(series);
                 }
                 var nativeVolumes = series == null ? new List<Volume>() : _volumeRepository.FindByMangaSeriesId(series.Id);
                 resource.Volumes = nativeVolumes

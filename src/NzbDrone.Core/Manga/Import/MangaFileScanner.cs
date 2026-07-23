@@ -65,10 +65,11 @@ namespace NzbDrone.Core.Manga.Import
             }
 
             var files = _diskProvider.GetFiles(path, true)
-                .Where(f => f.EndsWith(".cbz", StringComparison.OrdinalIgnoreCase))
+                .Where(f => f.EndsWith(".cbz", StringComparison.OrdinalIgnoreCase) ||
+                            f.EndsWith(".cbr", StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
-            _logger.Info("Scanning {0} for manga CBZ files, found {1} files", path, files.Count);
+            _logger.Info("Scanning {0} for manga CBZ/CBR files, found {1} files", path, files.Count);
 
             foreach (var filePath in files)
             {

@@ -24,6 +24,7 @@ namespace NzbDrone.Core.Manga.Import
         MangaSeries ImportSeries(string directoryPath, string foreignMangaId, MangaImportMode importMode = MangaImportMode.InPlace);
         MangaFile ImportFile(string filePath, int seriesId, int volumeId);
         Task<AutoImportResult> AutoImportFilesAsync(List<string> scanDirectories);
+        int ReconcileSeries(MangaSeries series);
     }
 
     public class AutoImportResult
@@ -293,6 +294,74 @@ namespace NzbDrone.Core.Manga.Import
                 result.FilesMoved);
 
             return Task.FromResult(result);
+        }
+
+        public int ReconcileSeries(MangaSeries series)
+        {
+            if (series?.Path == null || !_diskProvider.FolderExists(series.Path))
+            {
+                _logger.Debug("Cannot reconcile series: path does not exist or is null");
+                return 0;
+            }
+
+            var existingVolumes = _volumeRepository.FindByMangaSeriesId(series.Id);
+            if (existingVolumes.Count == 0)
+            {
+                _logger.Debug("Cannot reconcile series {0}: no volumes in database", series.Name);
+                return 0;
+            }
+
+            var existingFiles = _fileService.GetFilesBySeries(series.Id);
+            var existingPaths = new HashSet<string>(existingFiles.Select(f => f.Path));
+
+            var volumeLookup = existingVolumes
+                .GroupBy(v => v.VolumeNumber)
+                .ToDictionary(g => g.Key, g => g.First());
+
+            var scannedFiles = _fileScanner.ScanDirectory(series.Path);
+            var imported = 0;
+
+            foreach (var scanned in scannedFiles)
+            {
+                if (!scanned.VolumeNumber.HasValue)
+                {
+                    continue;
+                }
+
+                if (existingPaths.Contains(scanned.FilePath))
+                {
+                    continue;
+                }
+
+                if (!volumeLookup.TryGetValue(scanned.VolumeNumber.Value, out var volume))
+                {
+                    _logger.Debug("No volume record for volume {0} parsed from '{1}'", scanned.VolumeNumber.Value, scanned.FileName);
+                    continue;
+                }
+
+                var mangaFile = new MangaFile
+                {
+                    VolumeId = volume.Id,
+                    MangaSeriesId = series.Id,
+                    Path = scanned.FilePath,
+                    FileName = scanned.FileName,
+                    RelativePath = scanned.FileName,
+                    Size = scanned.FileSize,
+                    AddedAt = DateTime.UtcNow,
+                    IsVolumePack = !scanned.ChapterNumber.HasValue
+                };
+
+                _fileService.Add(mangaFile);
+                imported++;
+                _logger.Info("Reconciled file '{0}' to series {1} volume {2}", scanned.FileName, series.Name, scanned.VolumeNumber.Value);
+            }
+
+            if (imported > 0)
+            {
+                _logger.Info("Reconciled {0} file(s) for series {1}", imported, series.Name);
+            }
+
+            return imported;
         }
 
         private Volume FindOrCreateVolume(MangaSeries series, int volumeNumber)
