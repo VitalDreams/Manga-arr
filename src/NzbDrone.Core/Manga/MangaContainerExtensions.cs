@@ -33,6 +33,7 @@ namespace NzbDrone.Core.Manga
             // Register manga file service and repository
             container.Register<IMangaFileRepository, MangaFileRepository>(Reuse.Singleton);
             container.Register<IMangaFileService, MangaFileService>(Reuse.Singleton);
+            container.Register<IMangaFileMigrationService, MangaFileMigrationService>(Reuse.Singleton);
 
             // Register volume and chapter repositories
             container.Register<IVolumeRepository, VolumeRepository>(Reuse.Singleton);

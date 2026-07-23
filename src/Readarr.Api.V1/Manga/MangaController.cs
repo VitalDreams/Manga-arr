@@ -41,6 +41,7 @@ namespace Readarr.Api.V1.Manga
         private readonly IMangaFileService _mangaFileService;
         private readonly IMediaFileService _mediaFileService;
         private readonly IVolumeRepository _volumeRepository;
+        private readonly IMangaFileMigrationService _mangaFileMigrationService;
         private readonly Logger _logger;
 
         public MangaController(
@@ -58,6 +59,7 @@ namespace Readarr.Api.V1.Manga
             IMangaFileService mangaFileService,
             IMediaFileService mediaFileService,
             IVolumeRepository volumeRepository,
+            IMangaFileMigrationService mangaFileMigrationService,
             IBroadcastSignalRMessage signalRBroadcaster,
             Logger logger)
             : base(signalRBroadcaster)
@@ -76,6 +78,7 @@ namespace Readarr.Api.V1.Manga
             _mangaFileService = mangaFileService;
             _mediaFileService = mediaFileService;
             _volumeRepository = volumeRepository;
+            _mangaFileMigrationService = mangaFileMigrationService;
             _logger = logger;
 
             SharedValidator.RuleFor(s => s.Title).NotEmpty();
@@ -521,45 +524,11 @@ namespace Readarr.Api.V1.Manga
             {
                 var volumes = _volumeRepository.FindByMangaSeriesId(series.Id);
                 var legacyFiles = _mediaFileService.GetFilesByAuthor(author.Id);
+                var existingFilesByVolume = volumes.ToDictionary(
+                    v => v.Id,
+                    v => _mangaFileService.GetFilesByVolume(v.Id));
 
-                foreach (var volume in volumes)
-                {
-                    if (volume.ForeignVolumeId == null)
-                    {
-                        continue;
-                    }
-
-                    var existingPaths = new HashSet<string>(
-                        _mangaFileService.GetFilesByVolume(volume.Id).Select(f => f.Path));
-
-                    foreach (var bookFile in legacyFiles)
-                    {
-                        var foreignBookId = bookFile.Edition?.Value?.Book?.Value?.ForeignBookId;
-                        if (foreignBookId == null || foreignBookId != volume.ForeignVolumeId)
-                        {
-                            continue;
-                        }
-
-                        if (existingPaths.Contains(bookFile.Path))
-                        {
-                            continue;
-                        }
-
-                        var mangaFile = new MangaFile
-                        {
-                            Path = bookFile.Path,
-                            FileName = global::System.IO.Path.GetFileName(bookFile.Path),
-                            RelativePath = global::System.IO.Path.GetFileName(bookFile.Path),
-                            Size = bookFile.Size,
-                            AddedAt = bookFile.DateAdded,
-                            VolumeId = volume.Id,
-                            MangaSeriesId = series.Id,
-                            IsVolumePack = true
-                        };
-
-                        _mangaFileService.Add(mangaFile);
-                    }
-                }
+                _mangaFileMigrationService.MigrateLegacyBookFiles(author.Id, volumes, legacyFiles, existingFilesByVolume, series.Id);
             }
             catch (Exception ex)
             {
