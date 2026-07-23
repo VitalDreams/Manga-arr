@@ -202,6 +202,11 @@ namespace Readarr.Api.V1.Manga
 
             EnsureNativeSeries(addedAuthor, resource);
             var nativeSeries = ResolveMangaSeries(addedAuthor);
+            if (nativeSeries != null)
+            {
+                EnsureMangaFileMigration(addedAuthor, nativeSeries);
+            }
+
             var nativeVolumes = nativeSeries == null ? new List<Volume>() : _volumeRepository.FindByMangaSeriesId(nativeSeries.Id);
             resource.Volumes = nativeVolumes
                 .Select(v => v.ToResource(_mangaFileService.GetFilesByVolume(v.Id)))
@@ -514,49 +519,46 @@ namespace Readarr.Api.V1.Manga
         {
             try
             {
-                var existingMangaFiles = _mangaFileService.GetFilesBySeries(series.Id);
-                var volumeIdsWithFiles = new HashSet<int>(existingMangaFiles.Select(f => f.VolumeId));
-
                 var volumes = _volumeRepository.FindByMangaSeriesId(series.Id);
-                var volumesNeedingMigration = volumes.Where(v => !volumeIdsWithFiles.Contains(v.Id)).ToList();
+                var legacyFiles = _mediaFileService.GetFilesByAuthor(author.Id);
 
-                if (volumesNeedingMigration.Count == 0)
+                foreach (var volume in volumes)
                 {
-                    return;
-                }
-
-                var volumeByForeignId = volumesNeedingMigration
-                    .ToDictionary(v => v.ForeignVolumeId);
-
-                var bookFiles = _mediaFileService.GetFilesByAuthor(author.Id);
-
-                foreach (var bookFile in bookFiles)
-                {
-                    var foreignBookId = bookFile.Edition?.Value?.Book?.Value?.ForeignBookId;
-                    if (foreignBookId == null || !volumeByForeignId.TryGetValue(foreignBookId, out var volume))
+                    if (volume.ForeignVolumeId == null)
                     {
                         continue;
                     }
 
-                    // Skip if a MangaFile already exists for this volume (from another source)
-                    if (_mangaFileService.GetFilesByVolume(volume.Id).Any())
+                    var existingPaths = new HashSet<string>(
+                        _mangaFileService.GetFilesByVolume(volume.Id).Select(f => f.Path));
+
+                    foreach (var bookFile in legacyFiles)
                     {
-                        continue;
+                        var foreignBookId = bookFile.Edition?.Value?.Book?.Value?.ForeignBookId;
+                        if (foreignBookId == null || foreignBookId != volume.ForeignVolumeId)
+                        {
+                            continue;
+                        }
+
+                        if (existingPaths.Contains(bookFile.Path))
+                        {
+                            continue;
+                        }
+
+                        var mangaFile = new MangaFile
+                        {
+                            Path = bookFile.Path,
+                            FileName = global::System.IO.Path.GetFileName(bookFile.Path),
+                            RelativePath = global::System.IO.Path.GetFileName(bookFile.Path),
+                            Size = bookFile.Size,
+                            AddedAt = bookFile.DateAdded,
+                            VolumeId = volume.Id,
+                            MangaSeriesId = series.Id,
+                            IsVolumePack = true
+                        };
+
+                        _mangaFileService.Add(mangaFile);
                     }
-
-                    var mangaFile = new MangaFile
-                    {
-                        VolumeId = volume.Id,
-                        MangaSeriesId = series.Id,
-                        Path = bookFile.Path,
-                        FileName = global::System.IO.Path.GetFileName(bookFile.Path),
-                        RelativePath = global::System.IO.Path.GetFileName(bookFile.Path),
-                        Size = bookFile.Size,
-                        AddedAt = bookFile.DateAdded,
-                        IsVolumePack = true
-                    };
-
-                    _mangaFileService.Add(mangaFile);
                 }
             }
             catch (Exception ex)
