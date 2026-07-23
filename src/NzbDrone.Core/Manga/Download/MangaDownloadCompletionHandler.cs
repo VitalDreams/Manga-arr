@@ -67,6 +67,40 @@ namespace NzbDrone.Core.Manga.Download
             _metadataConnector = metadataConnector;
             _diskProvider = diskProvider;
             _logger = logger;
+
+            // Seed the processed set from existing MangaFile records so we skip
+            // downloads that were already processed before a restart.
+            SeedProcessedDownloadsFromDb();
+        }
+
+        /// <summary>
+        /// Populate the in-memory processed-downloads set from the MangaFile table so
+        /// downloads completed before a restart are not reprocessed.
+        /// </summary>
+        private void SeedProcessedDownloadsFromDb()
+        {
+            try
+            {
+                var existingFiles = _mangaFileService.GetAllFiles();
+                lock (_processedLock)
+                {
+                    foreach (var file in existingFiles)
+                    {
+                        // Use the file path as the dedup key since download IDs are
+                        // transient and not stored on MangaFile records.
+                        if (!string.IsNullOrEmpty(file.Path))
+                        {
+                            _processedDownloads.Add(file.Path);
+                        }
+                    }
+                }
+
+                _logger.Debug("Seeded {0} existing manga file paths into processed-downloads set", existingFiles.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to seed processed-downloads set from database");
+            }
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)

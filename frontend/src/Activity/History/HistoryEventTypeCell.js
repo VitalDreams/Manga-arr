@@ -44,23 +44,23 @@ function getIconKind(eventType) {
 function getTooltip(eventType, data) {
   switch (eventType) {
     case 'grabbed':
-      return `Book grabbed from ${data.indexer} and sent to ${data.downloadClient}`;
+      return `Volume grabbed from ${data.indexer} and sent to ${data.downloadClient}`;
     case 'authorFolderImported':
-      return 'Book imported from author folder';
+      return 'Volume imported from manga folder';
     case 'bookFileImported':
-      return 'Book downloaded successfully and picked up from download client';
+      return 'Volume downloaded successfully and picked up from download client';
     case 'downloadFailed':
-      return 'Book download failed';
+      return 'Volume download failed';
     case 'bookFileDeleted':
-      return 'Book file deleted';
+      return 'Volume file deleted';
     case 'bookFileRenamed':
-      return 'Book file renamed';
+      return 'Volume file renamed';
     case 'bookFileRetagged':
-      return 'Book file tags updated';
+      return 'Volume file tags updated';
     case 'bookImportIncomplete':
       return 'Files downloaded but not all could be imported';
     case 'downloadIgnored':
-      return 'Book Download Ignored';
+      return 'Volume Download Ignored';
     default:
       return 'Unknown event';
   }

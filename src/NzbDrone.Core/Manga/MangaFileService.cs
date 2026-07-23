@@ -8,6 +8,7 @@ namespace NzbDrone.Core.Manga
     public interface IMangaFileService
     {
         MangaFile GetById(int id);
+        List<MangaFile> GetAllFiles();
         List<MangaFile> GetFilesBySeries(int seriesId);
         List<MangaFile> GetFilesByVolume(int volumeId);
         List<MangaFile> GetVolumePacksBySeries(int seriesId);
@@ -30,6 +31,11 @@ namespace NzbDrone.Core.Manga
         public MangaFile GetById(int id)
         {
             return _repository.Get(id);
+        }
+
+        public List<MangaFile> GetAllFiles()
+        {
+            return _repository.All().ToList();
         }
 
         public List<MangaFile> GetFilesBySeries(int seriesId)

@@ -16,6 +16,7 @@ using NzbDrone.Core.Manga;
 using NzbDrone.Core.Manga.Connectors;
 using NzbDrone.Core.MediaCover;
 using NzbDrone.Core.MediaFiles;
+using NzbDrone.Core.Parser;
 using NzbDrone.Http.REST.Attributes;
 using NzbDrone.SignalR;
 using Readarr.Api.V1.Books;
@@ -244,7 +245,7 @@ namespace Readarr.Api.V1.Manga
             _authorMetadataService.Upsert(metadata);
 
             // Update author
-            existing.CleanName = (mangaResource.Title ?? string.Empty).ToLowerInvariant().Replace(" ", string.Empty);
+            existing.CleanName = (mangaResource.Title ?? string.Empty).CleanAuthorName();
             existing.Path = mangaResource.Path;
             existing.QualityProfileId = mangaResource.QualityProfileId;
             existing.MetadataProfileId = mangaResource.MetadataProfileId;

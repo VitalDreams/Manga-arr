@@ -5,6 +5,7 @@ using NUnit.Framework;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Manga;
 using NzbDrone.Core.Manga.Connectors;
+using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Test.Framework;
 using NzbDrone.Test.Common;
 
@@ -82,6 +83,81 @@ namespace NzbDrone.Core.Test.Manga
                 .Verify(x => x.GetChaptersForVolumeAsync(It.IsAny<string>(), It.IsAny<int>()), Times.Never());
             Mocker.GetMock<IMangaMetadataConnector>()
                 .Verify(x => x.GetVolumeChapterMapAsync(It.IsAny<string>()), Times.Never());
+        }
+
+        [Test]
+        public void add_series_should_use_canonical_cleannam_normalization()
+        {
+            // Titles with articles and punctuation should normalize via CleanAuthorName,
+            // not the simpler ToLowerInvariant().Replace(" ", "") that was used before.
+            var newSeries = new MangaSeries
+            {
+                Metadata = new LazyLoaded<MangaMetadata>(new MangaMetadata
+                {
+                    ForeignMangaId = "manga-456",
+                    Title = "Berserk: The Golden Age"
+                }),
+                Path = "/manga/berserk",
+                RootFolderPath = "/manga"
+            };
+
+            Mocker.GetMock<IMangaMetadataRepository>()
+                .Setup(x => x.FindByForeignMangaId("manga-456"))
+                .Returns((MangaMetadata)null);
+
+            Mocker.GetMock<IMangaSeriesRepository>()
+                .Setup(x => x.FindByMangaMetadataId(It.IsAny<int>()))
+                .Returns((MangaSeries)null);
+
+            Mocker.GetMock<IMangaMetadataRepository>()
+                .Setup(x => x.Insert(It.IsAny<MangaMetadata>()))
+                .Returns((MangaMetadata m) => { m.Id = 50; return m; });
+
+            Mocker.GetMock<IMangaSeriesRepository>()
+                .Setup(x => x.Insert(It.IsAny<MangaSeries>()))
+                .Returns((MangaSeries s) => { s.Id = 60; return s; });
+
+            var result = Subject.AddSeries(newSeries);
+
+            // CleanAuthorName strips articles ("the") and punctuation (":")
+            // "Berserk: The Golden Age" -> "berserkgoldenage"
+            Assert.That(result.CleanName, Is.EqualTo("berserkgoldenage"));
+        }
+
+        [Test]
+        public void add_series_should_not_leave_cleannam_null_when_name_is_null()
+        {
+            var newSeries = new MangaSeries
+            {
+                Metadata = new LazyLoaded<MangaMetadata>(new MangaMetadata
+                {
+                    ForeignMangaId = "manga-789",
+                    Title = null
+                }),
+                Path = "/manga/test",
+                RootFolderPath = "/manga"
+            };
+
+            Mocker.GetMock<IMangaMetadataRepository>()
+                .Setup(x => x.FindByForeignMangaId("manga-789"))
+                .Returns((MangaMetadata)null);
+
+            Mocker.GetMock<IMangaSeriesRepository>()
+                .Setup(x => x.FindByMangaMetadataId(It.IsAny<int>()))
+                .Returns((MangaSeries)null);
+
+            Mocker.GetMock<IMangaMetadataRepository>()
+                .Setup(x => x.Insert(It.IsAny<MangaMetadata>()))
+                .Returns((MangaMetadata m) => { m.Id = 70; return m; });
+
+            Mocker.GetMock<IMangaSeriesRepository>()
+                .Setup(x => x.Insert(It.IsAny<MangaSeries>()))
+                .Returns((MangaSeries s) => { s.Id = 80; return s; });
+
+            var result = Subject.AddSeries(newSeries);
+
+            Assert.That(result.CleanName, Is.Not.Null);
+            Assert.That(result.CleanName, Is.EqualTo(string.Empty));
         }
     }
 }

@@ -7,6 +7,7 @@ using NLog;
 using NzbDrone.Core.Books.Events;
 using NzbDrone.Core.Manga.Connectors;
 using NzbDrone.Core.Messaging.Events;
+using NzbDrone.Core.Parser;
 
 namespace NzbDrone.Core.Manga
 {
@@ -74,7 +75,7 @@ namespace NzbDrone.Core.Manga
         {
             if (string.IsNullOrEmpty(newSeries.CleanName))
             {
-                newSeries.CleanName = (newSeries.Name ?? string.Empty).ToLowerInvariant().Replace(" ", string.Empty);
+                newSeries.CleanName = (newSeries.Name ?? string.Empty).CleanAuthorName();
             }
 
             // Persist the MangaMetadata record first so we get a valid Id. ForeignMangaId is

@@ -9,6 +9,7 @@ using NzbDrone.Common.Disk;
 using NzbDrone.Core.Books;
 using NzbDrone.Core.Manga.Connectors;
 using NzbDrone.Core.Messaging.Events;
+using NzbDrone.Core.Parser;
 
 namespace NzbDrone.Core.Manga.Import
 {
@@ -207,7 +208,7 @@ namespace NzbDrone.Core.Manga.Import
                     try
                     {
                         // Match file to an existing series by clean name
-                        var cleanFileName = scanned.SeriesName?.ToLowerInvariant().Replace(" ", "") ?? string.Empty;
+                        var cleanFileName = (scanned.SeriesName ?? string.Empty).CleanAuthorName();
 
                         if (!seriesLookup.TryGetValue(cleanFileName, out var matchedSeries))
                         {
@@ -359,7 +360,7 @@ namespace NzbDrone.Core.Manga.Import
                 ForeignMangaId = foreignMangaId,
                 Path = directoryPath,
                 RootFolderPath = Path.GetDirectoryName(directoryPath),
-                CleanName = metadata.Title?.ToLowerInvariant().Replace(" ", "") ?? string.Empty,
+                CleanName = (metadata.Title ?? string.Empty).CleanAuthorName(),
                 Monitored = true,
                 MonitorNewItems = NewItemMonitorTypes.All,
                 DownloadMode = DownloadMode.VolumePack,

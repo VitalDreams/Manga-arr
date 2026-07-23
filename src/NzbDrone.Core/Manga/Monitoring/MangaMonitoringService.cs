@@ -12,6 +12,7 @@ namespace NzbDrone.Core.Manga.Monitoring
     {
         private readonly IMangaSeriesService _seriesService;
         private readonly IVolumeRepository _volumeRepository;
+        private readonly IMangaFileService _mangaFileService;
         private readonly IMetadataAggregator _metadataAggregator;
         private readonly IMangaSearchService _searchService;
         private readonly IKomgaIntegration _komga;
@@ -23,6 +24,7 @@ namespace NzbDrone.Core.Manga.Monitoring
         public MangaMonitoringService(
             IMangaSeriesService seriesService,
             IVolumeRepository volumeRepository,
+            IMangaFileService mangaFileService,
             IMetadataAggregator metadataAggregator,
             IMangaSearchService searchService,
             IKomgaIntegration komga,
@@ -30,6 +32,7 @@ namespace NzbDrone.Core.Manga.Monitoring
         {
             _seriesService = seriesService;
             _volumeRepository = volumeRepository;
+            _mangaFileService = mangaFileService;
             _metadataAggregator = metadataAggregator;
             _searchService = searchService;
             _komga = komga;
@@ -144,8 +147,14 @@ namespace NzbDrone.Core.Manga.Monitoring
                 .ToList();
             var existingVolumeNumbers = existingVolumes.Select(v => v.VolumeNumber).ToHashSet();
 
+            // Skip volumes that already have downloaded files
+            var downloadedVolumeNumbers = existingVolumes
+                .Where(v => _mangaFileService.GetFilesByVolume(v.Id).Any())
+                .Select(v => v.VolumeNumber)
+                .ToHashSet();
+
             var newVolumeNumbers = remoteVolumeNumbers
-                .Where(v => !existingVolumeNumbers.Contains(v))
+                .Where(v => !existingVolumeNumbers.Contains(v) && !downloadedVolumeNumbers.Contains(v))
                 .OrderBy(v => v)
                 .ToList();
 

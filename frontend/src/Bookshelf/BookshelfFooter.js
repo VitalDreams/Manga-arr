@@ -101,7 +101,7 @@ class BookshelfFooter extends Component {
       <PageContentFooter>
         <div className={styles.inputContainer}>
           <div className={styles.label}>
-            Monitor Author
+            Monitor Series
           </div>
 
           <SelectInput

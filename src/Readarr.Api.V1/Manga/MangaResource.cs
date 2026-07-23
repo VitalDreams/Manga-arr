@@ -6,6 +6,7 @@ using Newtonsoft.Json;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.Books;
 using NzbDrone.Core.MediaCover;
+using NzbDrone.Core.Parser;
 using Readarr.Http.REST;
 
 namespace Readarr.Api.V1.Manga
@@ -127,7 +128,7 @@ namespace Readarr.Api.V1.Manga
             return new NzbDrone.Core.Books.Author
             {
                 Id = resource.Id,
-                CleanName = (resource.Title ?? string.Empty).ToLowerInvariant().Replace(" ", string.Empty),
+                CleanName = (resource.Title ?? string.Empty).CleanAuthorName(),
                 Path = resource.Path,
                 QualityProfileId = resource.QualityProfileId,
                 MetadataProfileId = resource.MetadataProfileId,

@@ -26,8 +26,31 @@ namespace NzbDrone.Core.Test.Profiles
 
             Subject.Handle(new ApplicationStartedEvent());
 
+            // Three manga-native profiles: Manga, Manhwa, Archive
             Mocker.GetMock<IProfileRepository>()
-                .Verify(v => v.Insert(It.IsAny<QualityProfile>()), Times.Exactly(2));
+                .Verify(v => v.Insert(It.Is<QualityProfile>(p =>
+                    p.Name == "Manga" || p.Name == "Manhwa" || p.Name == "Archive")),
+                    Times.Exactly(3));
+        }
+
+        [Test]
+        public void init_should_create_manga_native_profile_names()
+        {
+            Mocker.GetMock<ICustomFormatService>()
+                .Setup(s => s.All())
+                .Returns(new List<CustomFormat>());
+
+            var insertedProfiles = new System.Collections.Generic.List<QualityProfile>();
+            Mocker.GetMock<IProfileRepository>()
+                .Setup(v => v.Insert(It.IsAny<QualityProfile>()))
+                .Callback<QualityProfile>(p => insertedProfiles.Add(p));
+
+            Subject.Handle(new ApplicationStartedEvent());
+
+            var names = insertedProfiles.ConvertAll(p => p.Name);
+            Assert.That(names, Does.Contain("Manga"));
+            Assert.That(names, Does.Contain("Manhwa"));
+            Assert.That(names, Does.Contain("Archive"));
         }
 
         [Test]

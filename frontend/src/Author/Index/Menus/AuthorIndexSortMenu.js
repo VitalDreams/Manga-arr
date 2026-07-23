@@ -70,7 +70,7 @@ function AuthorIndexSortMenu(props) {
           sortDirection={sortDirection}
           onPress={onSortSelect}
         >
-          Next Book
+          Next Volume
         </SortMenuItem>
 
         <SortMenuItem
@@ -79,7 +79,7 @@ function AuthorIndexSortMenu(props) {
           sortDirection={sortDirection}
           onPress={onSortSelect}
         >
-          Last Book
+          Last Volume
         </SortMenuItem>
 
         <SortMenuItem
@@ -97,7 +97,7 @@ function AuthorIndexSortMenu(props) {
           sortDirection={sortDirection}
           onPress={onSortSelect}
         >
-          Books
+          Volumes
         </SortMenuItem>
 
         <SortMenuItem
@@ -106,7 +106,7 @@ function AuthorIndexSortMenu(props) {
           sortDirection={sortDirection}
           onPress={onSortSelect}
         >
-          Books Progress
+          Volumes Progress
         </SortMenuItem>
 
         <SortMenuItem
