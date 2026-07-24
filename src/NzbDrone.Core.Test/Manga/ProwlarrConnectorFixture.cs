@@ -291,5 +291,65 @@ namespace NzbDrone.Core.Test.Manga
 
             Assert.That(results.First().Protocol, Is.EqualTo(DownloadProtocol.Usenet));
         }
+
+        [Test]
+        public async Task search_manga_volume_packs_should_reject_audiobook_release_with_matching_title_and_volume()
+        {
+            // Reproduces the live bug: an audiobook release whose title matches both the
+            // manga title and the volume-range pattern must never be returned as a candidate.
+            SetupIndexerFactory(
+                MakeTorznabDefinition("TorrentLeech", "http://prowlarr:9696/1/", "test-api-key"));
+
+            var json = @"[
+                {
+                    ""title"": ""Solo Leveling - Vol 1-8 - Chugong, Hye Young Im, J Torres [m4b mp3] [AUDIOBOOK]"",
+                    ""indexer"": ""TorrentLeech"",
+                    ""downloadUrl"": ""http://prowlarr:9696/1/api?t=get&id=abc123"",
+                    ""size"": 3304976640,
+                    ""seeders"": 12
+                }
+            ]";
+
+            Mocker.GetMock<IHttpClient>()
+                .Setup(x => x.GetAsync(It.IsAny<HttpRequest>()))
+                .ReturnsAsync(new HttpResponse(new HttpRequest(""), new HttpHeader(), json));
+
+            var results = await Subject.SearchMangaVolumePacksAsync("Solo Leveling", 1);
+
+            Assert.That(results, Is.Empty);
+        }
+
+        [Test]
+        public async Task search_manga_volume_packs_should_keep_valid_cbz_release_while_dropping_audiobook()
+        {
+            SetupIndexerFactory(
+                MakeTorznabDefinition("TorrentLeech", "http://prowlarr:9696/1/", "test-api-key"));
+
+            var json = @"[
+                {
+                    ""title"": ""Solo Leveling - Vol 1-8 - Chugong, Hye Young Im, J Torres [m4b mp3] [AUDIOBOOK]"",
+                    ""indexer"": ""TorrentLeech"",
+                    ""downloadUrl"": ""http://prowlarr:9696/1/api?t=get&id=abc123"",
+                    ""size"": 3304976640,
+                    ""seeders"": 12
+                },
+                {
+                    ""title"": ""Solo Leveling Vol 1 [CBZ]"",
+                    ""indexer"": ""TorrentLeech"",
+                    ""downloadUrl"": ""http://prowlarr:9696/1/api?t=get&id=def456"",
+                    ""size"": 200000000,
+                    ""seeders"": 3
+                }
+            ]";
+
+            Mocker.GetMock<IHttpClient>()
+                .Setup(x => x.GetAsync(It.IsAny<HttpRequest>()))
+                .ReturnsAsync(new HttpResponse(new HttpRequest(""), new HttpHeader(), json));
+
+            var results = await Subject.SearchMangaVolumePacksAsync("Solo Leveling", 1);
+
+            Assert.That(results, Has.Count.EqualTo(1));
+            Assert.That(results[0].Title, Is.EqualTo("Solo Leveling Vol 1 [CBZ]"));
+        }
     }
 }

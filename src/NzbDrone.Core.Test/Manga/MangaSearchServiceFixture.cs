@@ -912,5 +912,183 @@ namespace NzbDrone.Core.Test.Manga
                     It.IsAny<Volume>()),
                     Times.Once());
         }
+
+        // --- Release-format validation regression tests ---
+        // Reproduces the live incident: MangaSearchService selected an audiobook release
+        // ("Solo Leveling - Vol 1-8 - ... [m4b mp3] [AUDIOBOOK]") that matched title and
+        // volume, and sent it to qBittorrent. These verify invalid releases never reach
+        // SendToDownloadClient, even if a mocked/alternate IProwlarrConnector returns them.
+
+        [Test]
+        public async Task prowlarr_fallback_should_never_send_audiobook_release_to_download_client()
+        {
+            // Solo Leveling is a manhwa - matches the live bug report exactly.
+            var manhwaSeries = new MangaSeries
+            {
+                Id = 99,
+                Name = "Solo Leveling",
+                Monitored = true,
+                ForeignMangaId = "b1c42e49-d6f5-4084-9cec-771f5660c911",
+                Path = "/manga/Solo Leveling",
+                RootFolderPath = "/manga"
+            };
+
+            var manhwaVolume1 = new Volume
+            {
+                Id = 2001,
+                VolumeNumber = 1,
+                Title = "Volume 1",
+                MangaSeriesId = 99,
+                Monitored = true
+            };
+
+            Mocker.GetMock<IMangaSeriesService>()
+                .Setup(x => x.GetSeries(99))
+                .Returns(manhwaSeries);
+
+            Mocker.GetMock<IVolumeRepository>()
+                .Setup(x => x.FindBySeriesAndVolumeNumber(99, 1))
+                .Returns(manhwaVolume1);
+
+            Mocker.GetMock<IMangaMetadataConnector>()
+                .Setup(x => x.GetVolumeChapterMapAsync(manhwaSeries.ForeignMangaId))
+                .ReturnsAsync(new VolumeChapterMap
+                {
+                    ForeignMangaId = manhwaSeries.ForeignMangaId,
+                    VolumeChapters = new Dictionary<int, List<string>>()
+                });
+
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.IsConfigured)
+                .Returns(true);
+
+            // The exact release from the incident: title matches title and volume, but it's
+            // an audiobook, not manga.
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.SearchMangaVolumePacksAsync("Solo Leveling", 1))
+                .ReturnsAsync(new List<ProwlarrSearchResult>
+                {
+                    new ProwlarrSearchResult
+                    {
+                        Title = "Solo Leveling - Vol 1-8 - Chugong, Hye Young Im, J Torres [m4b mp3] [AUDIOBOOK]",
+                        DownloadUrl = "http://example.com/audiobook.torrent",
+                        Seeders = 12,
+                        Size = 3304976640,
+                        Protocol = DownloadProtocol.Torrent,
+                        Indexer = "TorrentLeech"
+                    }
+                });
+
+            var result = await Subject.SearchAndDownloadAsync(99, 1);
+
+            ExceptionVerification.ExpectedWarns(1);
+
+            Assert.That(result.Success, Is.False);
+            Assert.That(result.FailedVolumes, Has.Count.EqualTo(1));
+
+            Mocker.GetMock<IMangaDownloadService>()
+                .Verify(x => x.SendToDownloadClient(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<DownloadProtocol>(),
+                    It.IsAny<MangaSeries>(),
+                    It.IsAny<Volume>()),
+                    Times.Never());
+        }
+
+        [Test]
+        public async Task prowlarr_fallback_should_skip_audiobook_and_download_valid_usenet_release_instead()
+        {
+            Mocker.GetMock<IMangaSeriesService>()
+                .Setup(x => x.GetSeries(18))
+                .Returns(_series);
+
+            Mocker.GetMock<IVolumeRepository>()
+                .Setup(x => x.FindBySeriesAndVolumeNumber(18, 1))
+                .Returns(_volume1);
+
+            Mocker.GetMock<IMangaMetadataConnector>()
+                .Setup(x => x.GetVolumeChapterMapAsync(_series.ForeignMangaId))
+                .ReturnsAsync(new VolumeChapterMap
+                {
+                    ForeignMangaId = _series.ForeignMangaId,
+                    VolumeChapters = new Dictionary<int, List<string>>()
+                });
+
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.IsConfigured)
+                .Returns(true);
+
+            // Mix an invalid audiobook torrent (high seeders) with a valid NZB manga release
+            // (zero seeders, as Usenet always reports). Usenet-first priority plus format
+            // validation must select the valid NZB, never the audiobook.
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.SearchMangaVolumePacksAsync("Berserk", 1))
+                .ReturnsAsync(new List<ProwlarrSearchResult>
+                {
+                    new ProwlarrSearchResult
+                    {
+                        Title = "Berserk Vol 1 [m4b mp3] [AUDIOBOOK]",
+                        DownloadUrl = "http://example.com/audiobook.torrent",
+                        Seeders = 500,
+                        Size = 3000000000,
+                        Protocol = DownloadProtocol.Torrent,
+                        Indexer = "TorrentLeech"
+                    },
+                    new ProwlarrSearchResult
+                    {
+                        Title = "Berserk Vol 1 [CBZ]",
+                        DownloadUrl = "http://example.com/valid.nzb",
+                        Seeders = 0,
+                        Size = 200000000,
+                        Protocol = DownloadProtocol.Usenet,
+                        Indexer = "NZBgeek"
+                    }
+                });
+
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.GetDownloadProtocol(It.IsAny<ProwlarrSearchResult>()))
+                .Returns(DownloadProtocol.Usenet);
+
+            Mocker.GetMock<IMangaDownloadService>()
+                .Setup(x => x.SendToDownloadClient(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<DownloadProtocol>(),
+                    It.IsAny<MangaSeries>(),
+                    It.IsAny<Volume>()))
+                .ReturnsAsync(new MangaDownloadResult
+                {
+                    Success = true,
+                    DownloadId = "nzb-valid-1",
+                    Title = "Berserk Vol 1 [CBZ]",
+                    Protocol = DownloadProtocol.Usenet,
+                    ClientName = "SABnzbd"
+                });
+
+            var result = await Subject.SearchAndDownloadAsync(18, 1);
+
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.DownloadedVolumes[0].Source, Is.EqualTo("Prowlarr"));
+
+            Mocker.GetMock<IMangaDownloadService>()
+                .Verify(x => x.SendToDownloadClient(
+                    It.IsAny<string>(),
+                    "http://example.com/valid.nzb",
+                    DownloadProtocol.Usenet,
+                    _series,
+                    It.IsAny<Volume>()),
+                    Times.Once());
+
+            // The audiobook release must never be sent to the download client
+            Mocker.GetMock<IMangaDownloadService>()
+                .Verify(x => x.SendToDownloadClient(
+                    It.IsAny<string>(),
+                    "http://example.com/audiobook.torrent",
+                    It.IsAny<DownloadProtocol>(),
+                    It.IsAny<MangaSeries>(),
+                    It.IsAny<Volume>()),
+                    Times.Never());
+        }
     }
 }

@@ -294,6 +294,14 @@ namespace NzbDrone.Core.Manga.Connectors
                 .Where(r => !string.IsNullOrEmpty(r.MagnetUrl) || !string.IsNullOrEmpty(r.DownloadUrl))
                 .ToList();
 
+            // Reject releases whose title signals a non-manga format (audiobook, ebook-only,
+            // video, etc). Applied after protocol classification (already set per-result in
+            // SearchAsync) and before selection/sorting, so an invalid release can never be
+            // chosen as "best" regardless of title/volume match or seeder count.
+            filtered = filtered
+                .Where(r => MangaReleaseFormatValidator.IsValidFormat(r.Title))
+                .ToList();
+
             // Protocol-aware sort: Usenet has zero seeders by design, so boost
             // Usenet results alongside torrent results with seeders.
             filtered = filtered
@@ -325,8 +333,10 @@ namespace NzbDrone.Core.Manga.Connectors
             _logger.Info("Searching Prowlarr for manga: {0}", mangaTitle);
             var results = await SearchAsync(mangaTitle);
 
-            // Filter for manga-related results
-            results = results.Where(r => IsMangaRelease(r.Title)).ToList();
+            // Filter for manga-related results, rejecting non-manga formats (audiobook, video, etc.)
+            results = results
+                .Where(r => IsMangaRelease(r.Title) && MangaReleaseFormatValidator.IsValidFormat(r.Title))
+                .ToList();
 
             _logger.Info("Found {0} manga results for '{1}'", results.Count, mangaTitle);
             return results;

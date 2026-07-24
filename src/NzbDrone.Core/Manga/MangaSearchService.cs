@@ -337,8 +337,22 @@ namespace NzbDrone.Core.Manga
                     return null;
                 }
 
+                // Defense-in-depth: re-validate release format here too, in case a result
+                // ever reaches this point without going through the connector's own filter
+                // (e.g. a mocked/alternate IProwlarrConnector implementation). A release
+                // matching title and volume (e.g. an audiobook) must never be selected.
+                var validResults = searchResults
+                    .Where(r => MangaReleaseFormatValidator.IsValidFormat(r.Title))
+                    .ToList();
+
+                if (!validResults.Any())
+                {
+                    _logger.Warn("All Prowlarr results for {0} volume {1} failed format validation (non-manga media)", series.Name, volumeNumber);
+                    return null;
+                }
+
                 // Pick the best result (protocol-aware, then seeders, then size)
-                var bestResult = searchResults
+                var bestResult = validResults
                     .OrderByDescending(r => r.Protocol == DownloadProtocol.Usenet ? 1 : 0)
                     .ThenByDescending(r => r.Seeders)
                     .ThenByDescending(r => r.Size)
