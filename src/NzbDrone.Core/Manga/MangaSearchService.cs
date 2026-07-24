@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using NLog;
+using NzbDrone.Core.Indexers;
 using NzbDrone.Core.Manga.Connectors;
 using NzbDrone.Core.Manga.Download;
 using NzbDrone.Core.Manga.Monitoring;
@@ -336,13 +337,15 @@ namespace NzbDrone.Core.Manga
                     return null;
                 }
 
-                // Pick the best result (most seeders)
+                // Pick the best result (protocol-aware, then seeders, then size)
                 var bestResult = searchResults
-                    .OrderByDescending(r => r.Seeders)
+                    .OrderByDescending(r => r.Protocol == DownloadProtocol.Usenet ? 1 : 0)
+                    .ThenByDescending(r => r.Seeders)
+                    .ThenByDescending(r => r.Size)
                     .First();
 
-                _logger.Info("Found Prowlarr release: {0} (seeders: {1})",
-                    bestResult.Title, bestResult.Seeders);
+                _logger.Info("Selected Prowlarr release: {0} (protocol: {1}, indexer: {2}, seeders: {3}, size: {4})",
+                    bestResult.Title, bestResult.Protocol, bestResult.Indexer ?? "unknown", bestResult.Seeders, bestResult.Size);
 
                 // Step 5: Send to qBittorrent/SABnzbd via MangaDownloadService
                 var downloadUrl = !string.IsNullOrEmpty(bestResult.MagnetUrl)

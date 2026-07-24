@@ -171,8 +171,13 @@ namespace NzbDrone.Core.Manga.Connectors
 
             filtered = FilterByTitleAndVolume(filtered, mangaTitle, volumeNumber);
 
-            // Sort by seeders (more seeders = better availability)
-            filtered = filtered.OrderByDescending(r => r.Seeders).ToList();
+            // Protocol-aware sort: Usenet has zero seeders by design, so boost
+            // Usenet results alongside torrent results with seeders.
+            filtered = filtered
+                .OrderByDescending(r => r.Protocol == DownloadProtocol.Usenet ? 1 : 0)
+                .ThenByDescending(r => r.Seeders)
+                .ThenByDescending(r => r.Size)
+                .ToList();
 
             _logger.Info("Found {0} volume pack results for {1} Vol {2}", filtered.Count, mangaTitle, volumeNumber);
             return filtered;
@@ -383,19 +388,24 @@ namespace NzbDrone.Core.Manga.Connectors
 
                 if (items != null)
                 {
-                    results = items.Select(r => new ProwlarrSearchResult
+                    results = items.Select(r =>
                     {
-                        Id = r.Guid,
-                        Title = r.Title,
-                        Size = r.Size,
-                        DownloadUrl = r.DownloadUrl,
-                        InfoUrl = r.InfoUrl,
-                        Indexer = r.Indexer,
-                        Categories = r.Categories?.Select(c => c.Name).ToList() ?? new List<string>(),
-                        Seeders = r.Seeders,
-                        Peers = r.Peers,
-                        PublishDate = r.PublishDate,
-                        MagnetUrl = r.MagnetUrl
+                        var searchResult = new ProwlarrSearchResult
+                        {
+                            Id = r.Guid,
+                            Title = r.Title,
+                            Size = r.Size,
+                            DownloadUrl = r.DownloadUrl,
+                            InfoUrl = r.InfoUrl,
+                            Indexer = r.Indexer,
+                            Categories = r.Categories?.Select(c => c.Name).ToList() ?? new List<string>(),
+                            Seeders = r.Seeders,
+                            Peers = r.Peers,
+                            PublishDate = r.PublishDate,
+                            MagnetUrl = r.MagnetUrl
+                        };
+                        searchResult.Protocol = GetDownloadProtocol(searchResult);
+                        return searchResult;
                     }).ToList();
                 }
             }

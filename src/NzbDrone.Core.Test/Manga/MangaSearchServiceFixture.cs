@@ -469,5 +469,355 @@ namespace NzbDrone.Core.Test.Manga
                     It.Is<Volume>(v => v.Id == 0 && v.VolumeNumber == 7)),
                     Times.Once());
         }
+
+        // --- 429/failure fallback tests ---
+
+        [Test]
+        public async Task search_should_fallback_to_prowlarr_when_mangadex_download_returns_null()
+        {
+            // MangaDex download returns null (e.g. all pages failed with 429)
+            Mocker.GetMock<IMangaSeriesService>()
+                .Setup(x => x.GetSeries(18))
+                .Returns(_series);
+
+            Mocker.GetMock<IVolumeRepository>()
+                .Setup(x => x.FindBySeriesAndVolumeNumber(18, 42))
+                .Returns(new Volume { Id = 4200, VolumeNumber = 42, Title = "Volume 42", MangaSeriesId = 18 });
+
+            Mocker.GetMock<IMangaMetadataConnector>()
+                .Setup(x => x.GetVolumeChapterMapAsync(_series.ForeignMangaId))
+                .ReturnsAsync(new VolumeChapterMap
+                {
+                    ForeignMangaId = _series.ForeignMangaId,
+                    VolumeChapters = new Dictionary<int, List<string>>
+                    {
+                        { 42, new List<string> { "ch-200", "ch-201" } }
+                    }
+                });
+
+            // MangaDex download fails (returns null — simulating 429 page failures)
+            Mocker.GetMock<IMangaDexDownloader>()
+                .Setup(x => x.DownloadVolumeAsync(
+                    _series.RootFolderPath, _series,
+                    It.Is<Volume>(v => v.VolumeNumber == 42)))
+                .ReturnsAsync((string)null);
+
+            // Prowlarr fallback succeeds
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.IsConfigured)
+                .Returns(true);
+
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.SearchMangaVolumePacksAsync("Berserk", 42))
+                .ReturnsAsync(new List<ProwlarrSearchResult>
+                {
+                    new ProwlarrSearchResult
+                    {
+                        Title = "Berserk Vol 42",
+                        DownloadUrl = "http://example.com/nzb",
+                        Seeders = 0,
+                        Protocol = DownloadProtocol.Usenet,
+                        Indexer = "NZBgeek"
+                    }
+                });
+
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.GetDownloadProtocol(It.IsAny<ProwlarrSearchResult>()))
+                .Returns(DownloadProtocol.Usenet);
+
+            Mocker.GetMock<IMangaDownloadService>()
+                .Setup(x => x.SendToDownloadClient(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<DownloadProtocol>(),
+                    It.IsAny<MangaSeries>(),
+                    It.IsAny<Volume>()))
+                .ReturnsAsync(new MangaDownloadResult
+                {
+                    Success = true,
+                    DownloadId = "nzb-42",
+                    Title = "Berserk Vol 42",
+                    Protocol = DownloadProtocol.Usenet,
+                    ClientName = "SABnzbd"
+                });
+
+            var result = await Subject.SearchAndDownloadAsync(18, 42);
+
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.DownloadedVolumes, Has.Count.EqualTo(1));
+            Assert.That(result.DownloadedVolumes[0].Source, Is.EqualTo("Prowlarr"));
+            Assert.That(result.DownloadedVolumes[0].DownloadId, Is.EqualTo("nzb-42"));
+
+            // Verify Prowlarr was called
+            Mocker.GetMock<IProwlarrConnector>()
+                .Verify(x => x.SearchMangaVolumePacksAsync("Berserk", 42), Times.Once);
+
+            // Verify Usenet protocol was passed to download client
+            Mocker.GetMock<IMangaDownloadService>()
+                .Verify(x => x.SendToDownloadClient(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    DownloadProtocol.Usenet,
+                    _series,
+                    It.Is<Volume>(v => v.Id == 4200)),
+                    Times.Once());
+        }
+
+        [Test]
+        public async Task monitoring_overload_should_fallback_to_prowlarr_when_mangadex_returns_null()
+        {
+            var inlineVolume = new Volume
+            {
+                Id = 0,
+                VolumeNumber = 42,
+                Title = "Berserk Vol. 042"
+            };
+
+            Mocker.GetMock<IVolumeRepository>()
+                .Setup(x => x.FindBySeriesAndVolumeNumber(18, 42))
+                .Returns(new Volume { Id = 4200, VolumeNumber = 42, Title = "Volume 42", MangaSeriesId = 18 });
+
+            Mocker.GetMock<IMangaMetadataConnector>()
+                .Setup(x => x.GetVolumeChapterMapAsync(_series.ForeignMangaId))
+                .ReturnsAsync(new VolumeChapterMap
+                {
+                    ForeignMangaId = _series.ForeignMangaId,
+                    VolumeChapters = new Dictionary<int, List<string>>
+                    {
+                        { 42, new List<string> { "ch-200" } }
+                    }
+                });
+
+            // MangaDex download fails (null = 429/page failure)
+            Mocker.GetMock<IMangaDexDownloader>()
+                .Setup(x => x.DownloadVolumeAsync(
+                    _series.RootFolderPath, _series,
+                    It.Is<Volume>(v => v.VolumeNumber == 42)))
+                .ReturnsAsync((string)null);
+
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.IsConfigured)
+                .Returns(true);
+
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.SearchMangaVolumePacksAsync("Berserk", 42))
+                .ReturnsAsync(new List<ProwlarrSearchResult>
+                {
+                    new ProwlarrSearchResult
+                    {
+                        Title = "Berserk Vol 42",
+                        DownloadUrl = "http://example.com/nzb",
+                        Seeders = 0,
+                        Protocol = DownloadProtocol.Usenet,
+                        Indexer = "NZBgeek"
+                    }
+                });
+
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.GetDownloadProtocol(It.IsAny<ProwlarrSearchResult>()))
+                .Returns(DownloadProtocol.Usenet);
+
+            Mocker.GetMock<IMangaDownloadService>()
+                .Setup(x => x.SendToDownloadClient(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<DownloadProtocol>(),
+                    It.IsAny<MangaSeries>(),
+                    It.IsAny<Volume>()))
+                .ReturnsAsync(new MangaDownloadResult
+                {
+                    Success = true,
+                    DownloadId = "nzb-42",
+                    Title = "Berserk Vol 42",
+                    Protocol = DownloadProtocol.Usenet,
+                    ClientName = "SABnzbd"
+                });
+
+            var result = await Subject.SearchAndDownloadAsync(_series, inlineVolume);
+
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.DownloadedVolumes[0].Source, Is.EqualTo("Prowlarr"));
+
+            // DB volume (Id=4200) must be passed, not inline stub
+            Mocker.GetMock<IMangaDownloadService>()
+                .Verify(x => x.SendToDownloadClient(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    DownloadProtocol.Usenet,
+                    _series,
+                    It.Is<Volume>(v => v.Id == 4200)),
+                    Times.Once());
+        }
+
+        // --- Mixed torrent/Usenet selection tests ---
+
+        [Test]
+        public async Task prowlarr_fallback_should_select_usenet_over_torrent_with_seeders()
+        {
+            Mocker.GetMock<IMangaSeriesService>()
+                .Setup(x => x.GetSeries(18))
+                .Returns(_series);
+
+            Mocker.GetMock<IVolumeRepository>()
+                .Setup(x => x.FindBySeriesAndVolumeNumber(18, 1))
+                .Returns(_volume1);
+
+            // MangaDex has no chapters
+            Mocker.GetMock<IMangaMetadataConnector>()
+                .Setup(x => x.GetVolumeChapterMapAsync(_series.ForeignMangaId))
+                .ReturnsAsync(new VolumeChapterMap
+                {
+                    ForeignMangaId = _series.ForeignMangaId,
+                    VolumeChapters = new Dictionary<int, List<string>>()
+                });
+
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.IsConfigured)
+                .Returns(true);
+
+            // Return both torrent (with seeders) and Usenet (zero seeders)
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.SearchMangaVolumePacksAsync("Berserk", 1))
+                .ReturnsAsync(new List<ProwlarrSearchResult>
+                {
+                    new ProwlarrSearchResult
+                    {
+                        Title = "Berserk Vol 1 [torrent]",
+                        DownloadUrl = "http://example.com/torrent",
+                        Seeders = 50,
+                        Size = 500_000_000,
+                        Protocol = DownloadProtocol.Torrent,
+                        Indexer = "Nyaa"
+                    },
+                    new ProwlarrSearchResult
+                    {
+                        Title = "Berserk Vol 1 [nzb]",
+                        DownloadUrl = "http://example.com/nzb",
+                        Seeders = 0,
+                        Size = 450_000_000,
+                        Protocol = DownloadProtocol.Usenet,
+                        Indexer = "NZBgeek"
+                    }
+                });
+
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.GetDownloadProtocol(It.Is<ProwlarrSearchResult>(r => r.Protocol == DownloadProtocol.Usenet)))
+                .Returns(DownloadProtocol.Usenet);
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.GetDownloadProtocol(It.Is<ProwlarrSearchResult>(r => r.Protocol == DownloadProtocol.Torrent)))
+                .Returns(DownloadProtocol.Torrent);
+
+            Mocker.GetMock<IMangaDownloadService>()
+                .Setup(x => x.SendToDownloadClient(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<DownloadProtocol>(),
+                    It.IsAny<MangaSeries>(),
+                    It.IsAny<Volume>()))
+                .ReturnsAsync(new MangaDownloadResult
+                {
+                    Success = true,
+                    DownloadId = "nzb-001",
+                    Title = "Berserk Vol 1 [nzb]",
+                    Protocol = DownloadProtocol.Usenet,
+                    ClientName = "SABnzbd"
+                });
+
+            var result = await Subject.SearchAndDownloadAsync(18, 1);
+
+            Assert.That(result.Success, Is.True);
+
+            // Usenet (NZBgeek) should be selected despite zero seeders
+            Mocker.GetMock<IMangaDownloadService>()
+                .Verify(x => x.SendToDownloadClient(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    DownloadProtocol.Usenet,
+                    _series,
+                    It.IsAny<Volume>()),
+                    Times.Once());
+        }
+
+        [Test]
+        public async Task prowlarr_fallback_should_select_torrent_when_only_torrents_available()
+        {
+            Mocker.GetMock<IMangaSeriesService>()
+                .Setup(x => x.GetSeries(18))
+                .Returns(_series);
+
+            Mocker.GetMock<IVolumeRepository>()
+                .Setup(x => x.FindBySeriesAndVolumeNumber(18, 1))
+                .Returns(_volume1);
+
+            Mocker.GetMock<IMangaMetadataConnector>()
+                .Setup(x => x.GetVolumeChapterMapAsync(_series.ForeignMangaId))
+                .ReturnsAsync(new VolumeChapterMap
+                {
+                    ForeignMangaId = _series.ForeignMangaId,
+                    VolumeChapters = new Dictionary<int, List<string>>()
+                });
+
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.IsConfigured)
+                .Returns(true);
+
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.SearchMangaVolumePacksAsync("Berserk", 1))
+                .ReturnsAsync(new List<ProwlarrSearchResult>
+                {
+                    new ProwlarrSearchResult
+                    {
+                        Title = "Berserk Vol 1 [low seeders]",
+                        DownloadUrl = "http://example.com/t1",
+                        Seeders = 5,
+                        Size = 500_000_000,
+                        Protocol = DownloadProtocol.Torrent,
+                        Indexer = "Nyaa"
+                    },
+                    new ProwlarrSearchResult
+                    {
+                        Title = "Berserk Vol 1 [high seeders]",
+                        DownloadUrl = "http://example.com/t2",
+                        Seeders = 100,
+                        Size = 480_000_000,
+                        Protocol = DownloadProtocol.Torrent,
+                        Indexer = "Nyaa"
+                    }
+                });
+
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.GetDownloadProtocol(It.IsAny<ProwlarrSearchResult>()))
+                .Returns(DownloadProtocol.Torrent);
+
+            Mocker.GetMock<IMangaDownloadService>()
+                .Setup(x => x.SendToDownloadClient(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<DownloadProtocol>(),
+                    It.IsAny<MangaSeries>(),
+                    It.IsAny<Volume>()))
+                .ReturnsAsync(new MangaDownloadResult
+                {
+                    Success = true,
+                    DownloadId = "tor-001",
+                    Title = "Berserk Vol 1 [high seeders]",
+                    Protocol = DownloadProtocol.Torrent,
+                    ClientName = "qBittorrent"
+                });
+
+            var result = await Subject.SearchAndDownloadAsync(18, 1);
+
+            Assert.That(result.Success, Is.True);
+
+            // Highest seeders torrent should be selected
+            Mocker.GetMock<IMangaDownloadService>()
+                .Verify(x => x.SendToDownloadClient(
+                    It.IsAny<string>(),
+                    "http://example.com/t2",
+                    DownloadProtocol.Torrent,
+                    _series,
+                    It.IsAny<Volume>()),
+                    Times.Once());
+        }
     }
 }

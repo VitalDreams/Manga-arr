@@ -232,6 +232,9 @@ namespace NzbDrone.Core.Manga
             }
         }
 
+        private const int MaxPageRetries = 3;
+        private const int BaseRetryDelayMs = 1000;
+
         private async Task<List<string>> DownloadPagesAsync(string tempDir, decimal chapterNumber, ChapterPages pages)
         {
             _diskProvider.EnsureFolder(tempDir);
@@ -245,23 +248,10 @@ namespace NzbDrone.Core.Manga
                 var fileName = $"{chapterNumber:000}_{(i + 1):000}{ext}";
                 var filePath = Path.Combine(tempDir, fileName);
 
-                _logger.Debug($"Downloading page {i + 1}/{pages.PageUrls.Count}: {url}");
-
-                try
+                var downloaded = await DownloadPageWithRetryAsync(url, filePath, i + 1, pages.PageUrls.Count);
+                if (downloaded)
                 {
-                    var response = await _httpClient.GetAsync(url);
-                    response.EnsureSuccessStatusCode();
-
-                    using (var fileStream = new FileStream(filePath, FileMode.Create))
-                    {
-                        await response.Content.CopyToAsync(fileStream);
-                    }
-
                     imagePaths.Add(filePath);
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex, $"Failed to download page {i + 1}: {url}");
                 }
 
                 // Rate limit: 1 req/s for images
@@ -269,6 +259,66 @@ namespace NzbDrone.Core.Manga
             }
 
             return imagePaths;
+        }
+
+        private async Task<bool> DownloadPageWithRetryAsync(string url, string filePath, int pageNum, int totalPages)
+        {
+            for (var attempt = 0; attempt <= MaxPageRetries; attempt++)
+            {
+                try
+                {
+                    if (attempt > 0)
+                    {
+                        var delay = BaseRetryDelayMs * (1 << (attempt - 1)); // exponential backoff
+                        _logger.Debug("Retry {0}/{1} for page {2} after {3}ms", attempt, MaxPageRetries, pageNum, delay);
+                        await Task.Delay(delay);
+                    }
+
+                    _logger.Debug("Downloading page {0}/{1}: {2}", pageNum, totalPages, url);
+
+                    var response = await _httpClient.GetAsync(url);
+
+                    if ((int)response.StatusCode == 429)
+                    {
+                        _logger.Warn("HTTP 429 (Too Many Requests) for page {0}, attempt {1}/{2}", pageNum, attempt + 1, MaxPageRetries + 1);
+                        continue; // retry with backoff
+                    }
+
+                    response.EnsureSuccessStatusCode();
+
+                    using (var fileStream = new FileStream(filePath, FileMode.Create))
+                    {
+                        await response.Content.CopyToAsync(fileStream);
+                    }
+
+                    return true;
+                }
+                catch (HttpRequestException ex)
+                {
+                    _logger.Warn("HTTP error downloading page {0} (attempt {1}/{2}): {3}", pageNum, attempt + 1, MaxPageRetries + 1, ex.Message);
+                    if (attempt == MaxPageRetries)
+                    {
+                        _logger.Error("Giving up on page {0} after {1} attempts: {2}", pageNum, MaxPageRetries + 1, url);
+                        return false;
+                    }
+                }
+                catch (TaskCanceledException ex)
+                {
+                    _logger.Warn("Timeout downloading page {0} (attempt {1}/{2}): {3}", pageNum, attempt + 1, MaxPageRetries + 1, ex.Message);
+                    if (attempt == MaxPageRetries)
+                    {
+                        _logger.Error("Giving up on page {0} after {1} attempts (timeout): {2}", pageNum, MaxPageRetries + 1, url);
+                        return false;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex, "Unexpected error downloading page {0}: {1}", pageNum, url);
+                    return false; // non-transient, don't retry
+                }
+            }
+
+            return false;
         }
 
         private string GetExtension(string url)
