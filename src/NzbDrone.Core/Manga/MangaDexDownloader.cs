@@ -126,6 +126,12 @@ namespace NzbDrone.Core.Manga
                     var pages = await _connector.GetChapterPagesAsync(chapterInfo.ForeignChapterId);
                     var imagePaths = await DownloadPagesAsync(tempDir, chapterInfo.ChapterNumber, pages);
 
+                    if (imagePaths == null)
+                    {
+                        _logger.Error("Aborting volume {0} download: chapter {1} page downloads failed", volume.VolumeNumber, chapterInfo.ChapterNumber);
+                        return null;
+                    }
+
                     var chapter = new Chapter
                     {
                         ForeignChapterId = chapterInfo.ForeignChapterId,
@@ -193,6 +199,12 @@ namespace NzbDrone.Core.Manga
             {
                 var imagePaths = await DownloadPagesAsync(tempDir, chapter.ChapterNumber, pages);
 
+                if (imagePaths == null)
+                {
+                    _logger.Error("Aborting chapter {0} download: page downloads failed", chapter.ChapterNumber);
+                    return null;
+                }
+
                 // Use naming service to determine the series folder under the root
                 var seriesFolder = _namingService.GetSeriesFolder(series);
                 var fullOutputDir = Path.Combine(outputDir, seriesFolder);
@@ -249,10 +261,13 @@ namespace NzbDrone.Core.Manga
                 var filePath = Path.Combine(tempDir, fileName);
 
                 var downloaded = await DownloadPageWithRetryAsync(url, filePath, i + 1, pages.PageUrls.Count);
-                if (downloaded)
+                if (!downloaded)
                 {
-                    imagePaths.Add(filePath);
+                    _logger.Error("Chapter {0} download aborted: page {1}/{2} failed after retries", chapterNumber, i + 1, pages.PageUrls.Count);
+                    return null;
                 }
+
+                imagePaths.Add(filePath);
 
                 // Rate limit: 1 req/s for images
                 await Task.Delay(1100);
