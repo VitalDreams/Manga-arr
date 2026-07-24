@@ -252,5 +252,222 @@ namespace NzbDrone.Core.Test.Manga
             Assert.That(result.FailedVolumes, Has.Count.EqualTo(1));
             Assert.That(result.FailedVolumes[0].VolumeNumber, Is.EqualTo(1));
         }
+
+        // --- Monitoring-path regression tests ---
+        // MangaMonitoringService calls SearchAndDownloadAsync(series, volume) with an inline
+        // Volume that has Id=0. These tests verify the overload resolves the DB volume
+        // before passing it to MangaDex/Prowlarr download paths.
+
+        [Test]
+        public async Task monitoring_overload_should_resolve_db_volume_before_mangadex_download()
+        {
+            // Simulate monitoring: caller passes an inline Volume with Id=0
+            var inlineVolume = new Volume
+            {
+                Id = 0,
+                VolumeNumber = 1,
+                Title = "Berserk Vol. 001"
+            };
+
+            Mocker.GetMock<IVolumeRepository>()
+                .Setup(x => x.FindBySeriesAndVolumeNumber(18, 1))
+                .Returns(_volume1);
+
+            Mocker.GetMock<IMangaMetadataConnector>()
+                .Setup(x => x.GetVolumeChapterMapAsync(_series.ForeignMangaId))
+                .ReturnsAsync(new VolumeChapterMap
+                {
+                    ForeignMangaId = _series.ForeignMangaId,
+                    VolumeChapters = new Dictionary<int, List<string>>
+                    {
+                        { 1, new List<string> { "ch-1", "ch-2" } }
+                    }
+                });
+
+            Mocker.GetMock<IMangaDexDownloader>()
+                .Setup(x => x.DownloadVolumeAsync(
+                    _series.RootFolderPath, _series,
+                    It.Is<Volume>(v => v.Id == 1001 && v.VolumeNumber == 1)))
+                .ReturnsAsync("/manga/Berserk/Berserk Vol. 001.cbz");
+
+            var result = await Subject.SearchAndDownloadAsync(_series, inlineVolume);
+
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.DownloadedVolumes, Has.Count.EqualTo(1));
+            Assert.That(result.DownloadedVolumes[0].Source, Is.EqualTo("MangaDex"));
+
+            // Critical: the persisted Volume (Id=1001) must be passed, not the inline stub (Id=0)
+            Mocker.GetMock<IMangaDexDownloader>()
+                .Verify(x => x.DownloadVolumeAsync(
+                    _series.RootFolderPath,
+                    _series,
+                    It.Is<Volume>(v => v.Id == 1001 && v.VolumeNumber == 1)),
+                    Times.Once());
+        }
+
+        [Test]
+        public async Task monitoring_overload_should_resolve_db_volume_for_prowlarr_fallback()
+        {
+            var inlineVolume = new Volume
+            {
+                Id = 0,
+                VolumeNumber = 1,
+                Title = "Berserk Vol. 001"
+            };
+
+            Mocker.GetMock<IVolumeRepository>()
+                .Setup(x => x.FindBySeriesAndVolumeNumber(18, 1))
+                .Returns(_volume1);
+
+            // MangaDex has no chapters for this volume
+            Mocker.GetMock<IMangaMetadataConnector>()
+                .Setup(x => x.GetVolumeChapterMapAsync(_series.ForeignMangaId))
+                .ReturnsAsync(new VolumeChapterMap
+                {
+                    ForeignMangaId = _series.ForeignMangaId,
+                    VolumeChapters = new Dictionary<int, List<string>>()
+                });
+
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.IsConfigured)
+                .Returns(true);
+
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.SearchMangaVolumePacksAsync("Berserk", 1))
+                .ReturnsAsync(new List<ProwlarrSearchResult>
+                {
+                    new ProwlarrSearchResult
+                    {
+                        Title = "Berserk Vol 1",
+                        DownloadUrl = "http://example.com/download",
+                        Seeders = 10
+                    }
+                });
+
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.GetDownloadProtocol(It.IsAny<ProwlarrSearchResult>()))
+                .Returns(DownloadProtocol.Torrent);
+
+            Mocker.GetMock<IMangaDownloadService>()
+                .Setup(x => x.SendToDownloadClient(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<DownloadProtocol>(),
+                    It.IsAny<MangaSeries>(),
+                    It.IsAny<Volume>()))
+                .ReturnsAsync(new MangaDownloadResult
+                {
+                    Success = true,
+                    DownloadId = "dl-456",
+                    Title = "Berserk Vol 1",
+                    ClientName = "qBittorrent"
+                });
+
+            var result = await Subject.SearchAndDownloadAsync(_series, inlineVolume);
+
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.DownloadedVolumes, Has.Count.EqualTo(1));
+            Assert.That(result.DownloadedVolumes[0].Source, Is.EqualTo("Prowlarr"));
+
+            // Critical: the persisted Volume (Id=1001) must be passed to Prowlarr path too
+            Mocker.GetMock<IMangaDownloadService>()
+                .Verify(x => x.SendToDownloadClient(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<DownloadProtocol>(),
+                    _series,
+                    It.Is<Volume>(v => v.Id == 1001)),
+                    Times.Once());
+        }
+
+        [Test]
+        public async Task monitoring_overload_should_trigger_komga_and_notification_on_mangadex_success()
+        {
+            var inlineVolume = new Volume
+            {
+                Id = 0,
+                VolumeNumber = 1,
+                Title = "Berserk Vol. 001"
+            };
+
+            Mocker.GetMock<IVolumeRepository>()
+                .Setup(x => x.FindBySeriesAndVolumeNumber(18, 1))
+                .Returns(_volume1);
+
+            Mocker.GetMock<IMangaMetadataConnector>()
+                .Setup(x => x.GetVolumeChapterMapAsync(_series.ForeignMangaId))
+                .ReturnsAsync(new VolumeChapterMap
+                {
+                    ForeignMangaId = _series.ForeignMangaId,
+                    VolumeChapters = new Dictionary<int, List<string>>
+                    {
+                        { 1, new List<string> { "ch-1" } }
+                    }
+                });
+
+            Mocker.GetMock<IMangaDexDownloader>()
+                .Setup(x => x.DownloadVolumeAsync(
+                    _series.RootFolderPath, _series,
+                    It.Is<Volume>(v => v.Id == 1001)))
+                .ReturnsAsync("/manga/Berserk/Berserk Vol. 001.cbz");
+
+            var result = await Subject.SearchAndDownloadAsync(_series, inlineVolume);
+
+            Assert.That(result.Success, Is.True);
+
+            // Komga scan and notification must fire on MangaDex success path
+            Mocker.GetMock<IKomgaIntegration>()
+                .Verify(x => x.TriggerLibraryScanAsync(), Times.Once());
+
+            Mocker.GetMock<INotificationService>()
+                .Verify(x => x.SendAsync(It.Is<Notification>(n =>
+                    n.Title == "New Manga Volume Downloaded")),
+                    Times.Once());
+        }
+
+        [Test]
+        public async Task monitoring_overload_should_fallback_to_inline_volume_when_not_in_db()
+        {
+            var inlineVolume = new Volume
+            {
+                Id = 0,
+                VolumeNumber = 7,
+                Title = "Berserk Vol. 007"
+            };
+
+            // Volume not in DB
+            Mocker.GetMock<IVolumeRepository>()
+                .Setup(x => x.FindBySeriesAndVolumeNumber(18, 7))
+                .Returns((Volume)null);
+
+            Mocker.GetMock<IMangaMetadataConnector>()
+                .Setup(x => x.GetVolumeChapterMapAsync(_series.ForeignMangaId))
+                .ReturnsAsync(new VolumeChapterMap
+                {
+                    ForeignMangaId = _series.ForeignMangaId,
+                    VolumeChapters = new Dictionary<int, List<string>>
+                    {
+                        { 7, new List<string> { "ch-30" } }
+                    }
+                });
+
+            Mocker.GetMock<IMangaDexDownloader>()
+                .Setup(x => x.DownloadVolumeAsync(
+                    _series.RootFolderPath, _series,
+                    It.Is<Volume>(v => v.Id == 0 && v.VolumeNumber == 7)))
+                .ReturnsAsync("/manga/Berserk/Berserk Vol. 007.cbz");
+
+            var result = await Subject.SearchAndDownloadAsync(_series, inlineVolume);
+
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.DownloadedVolumes[0].VolumeNumber, Is.EqualTo(7));
+
+            // Fallback: inline volume with Id=0 is used when DB has no row
+            Mocker.GetMock<IMangaDexDownloader>()
+                .Verify(x => x.DownloadVolumeAsync(
+                    _series.RootFolderPath, _series,
+                    It.Is<Volume>(v => v.Id == 0 && v.VolumeNumber == 7)),
+                    Times.Once());
+        }
     }
 }

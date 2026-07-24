@@ -232,7 +232,12 @@ namespace NzbDrone.Core.Manga
                 ForeignMangaId = series.ForeignMangaId
             };
 
-            _logger.Info("Starting search and download for {0} volume {1}", series.Name, volume.VolumeNumber);
+            // Resolve the persisted Volume from DB so MangaFile.VolumeId and VolumePackTracker
+            // get the real Id. Fall back to the caller-provided stub when no DB row exists.
+            var resolvedVolume = _volumeRepository.FindBySeriesAndVolumeNumber(series.Id, volume.VolumeNumber)
+                ?? volume;
+
+            _logger.Info("Starting search and download for {0} volume {1}", series.Name, resolvedVolume.VolumeNumber);
 
             try
             {
@@ -240,48 +245,50 @@ namespace NzbDrone.Core.Manga
                 var volumeChapterMap = await _mangaDexConnector.GetVolumeChapterMapAsync(series.ForeignMangaId);
 
                 if (volumeChapterMap?.VolumeChapters != null &&
-                    volumeChapterMap.VolumeChapters.ContainsKey(volume.VolumeNumber))
+                    volumeChapterMap.VolumeChapters.ContainsKey(resolvedVolume.VolumeNumber))
                 {
-                    _logger.Info("Downloading volume {0} from MangaDex...", volume.VolumeNumber);
+                    _logger.Info("Downloading volume {0} from MangaDex...", resolvedVolume.VolumeNumber);
                     var downloadPath = await _mangaDexDownloader.DownloadVolumeAsync(
-                        series.RootFolderPath ?? series.Path, series, volume);
+                        series.RootFolderPath ?? series.Path, series, resolvedVolume);
 
                     if (downloadPath != null)
                     {
                         result.DownloadedVolumes.Add(new DownloadedVolumeResult
                         {
-                            VolumeNumber = volume.VolumeNumber,
+                            VolumeNumber = resolvedVolume.VolumeNumber,
                             FilePath = downloadPath,
                             Source = "MangaDex"
                         });
                         result.Success = true;
                         result.TotalVolumesSearched = 1;
-                        return result;
                     }
                 }
 
-                // Fallback to Prowlarr
-                _logger.Info("MangaDex unavailable for volume {0}, trying Prowlarr...", volume.VolumeNumber);
-                var prowlarrResult = await TryProwlarrFallbackAsync(series, volume, volume.VolumeNumber);
+                if (!result.DownloadedVolumes.Any())
+                {
+                    // Fallback to Prowlarr
+                    _logger.Info("MangaDex unavailable for volume {0}, trying Prowlarr...", resolvedVolume.VolumeNumber);
+                    var prowlarrResult = await TryProwlarrFallbackAsync(series, resolvedVolume, resolvedVolume.VolumeNumber);
 
-                if (prowlarrResult != null)
-                {
-                    result.DownloadedVolumes.Add(prowlarrResult);
-                    result.Success = true;
-                }
-                else
-                {
-                    result.FailedVolumes.Add(new FailedVolumeResult
+                    if (prowlarrResult != null)
                     {
-                        VolumeNumber = volume.VolumeNumber,
-                        ErrorMessage = "Both MangaDex and Prowlarr failed",
-                        Source = "Both"
-                    });
+                        result.DownloadedVolumes.Add(prowlarrResult);
+                        result.Success = true;
+                    }
+                    else
+                    {
+                        result.FailedVolumes.Add(new FailedVolumeResult
+                        {
+                            VolumeNumber = resolvedVolume.VolumeNumber,
+                            ErrorMessage = "Both MangaDex and Prowlarr failed",
+                            Source = "Both"
+                        });
+                    }
+
+                    result.TotalVolumesSearched = 1;
                 }
 
-                result.TotalVolumesSearched = 1;
-
-                // Komga scan + notification
+                // Komga scan + notification (both MangaDex and Prowlarr paths)
                 if (result.DownloadedVolumes.Any())
                 {
                     try { await _komga.TriggerLibraryScanAsync(); }
@@ -292,7 +299,7 @@ namespace NzbDrone.Core.Manga
                         await _notifications.SendAsync(new Notification
                         {
                             Title = "New Manga Volume Downloaded",
-                            Message = $"{series.Name} Volume {volume.VolumeNumber} downloaded from {result.DownloadedVolumes.First().Source}",
+                            Message = $"{series.Name} Volume {resolvedVolume.VolumeNumber} downloaded from {result.DownloadedVolumes.First().Source}",
                             Type = NotificationType.Download
                         });
                     }
@@ -301,7 +308,7 @@ namespace NzbDrone.Core.Manga
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "Error during search and download for {0} volume {1}", series.Name, volume.VolumeNumber);
+                _logger.Error(ex, "Error during search and download for {0} volume {1}", series.Name, resolvedVolume.VolumeNumber);
                 result.Success = false;
                 result.ErrorMessage = ex.Message;
             }
