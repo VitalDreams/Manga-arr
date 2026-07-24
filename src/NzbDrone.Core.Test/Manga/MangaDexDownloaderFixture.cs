@@ -130,6 +130,120 @@ namespace NzbDrone.Core.Test.Manga
         }
 
         [Test]
+        public async Task download_volume_should_return_null_when_chapter_has_no_pages()
+        {
+            // Simulates MangaDex /at-home/server returning chapter.data=[] (empty page list)
+            Mocker.GetMock<IMangaMetadataConnector>()
+                .Setup(x => x.GetChaptersForVolumeAsync("manga-001", 1))
+                .ReturnsAsync(new List<ChapterInfo>
+                {
+                    new ChapterInfo
+                    {
+                        ForeignChapterId = "ch-1",
+                        ChapterNumber = 1,
+                        PageCount = 0
+                    }
+                });
+
+            Mocker.GetMock<IMangaMetadataConnector>()
+                .Setup(x => x.GetChapterPagesAsync("ch-1"))
+                .ReturnsAsync(new ChapterPages
+                {
+                    ForeignChapterId = "ch-1",
+                    PageUrls = new List<string>()
+                });
+
+            Mocker.GetMock<IDiskProvider>()
+                .Setup(x => x.FolderExists(It.IsAny<string>()))
+                .Returns(true);
+
+            var result = await Subject.DownloadVolumeAsync("/output", _series, _volume);
+
+            Assert.That(result, Is.Null);
+
+            // Must not create CBZ, MangaFile, or record volume pack
+            Mocker.GetMock<ICbzCreator>()
+                .Verify(x => x.CreateCbzFromVolumeAsync(
+                    It.IsAny<string>(), It.IsAny<MangaSeries>(),
+                    It.IsAny<Volume>(), It.IsAny<Dictionary<Chapter, List<string>>>()),
+                    Times.Never());
+
+            Mocker.GetMock<IMangaFileService>()
+                .Verify(x => x.Add(It.IsAny<MangaFile>()), Times.Never());
+
+            Mocker.GetMock<IVolumePackTracker>()
+                .Verify(x => x.RecordVolumePack(
+                    It.IsAny<int>(), It.IsAny<int>(), It.IsAny<List<decimal>>()),
+                    Times.Never());
+        }
+
+        [Test]
+        public async Task download_chapter_should_return_null_when_chapter_has_no_pages()
+        {
+            var chapter = new Chapter
+            {
+                ForeignChapterId = "ch-5",
+                ChapterNumber = 5,
+                PageCount = 0
+            };
+
+            Mocker.GetMock<IMangaMetadataConnector>()
+                .Setup(x => x.GetChapterPagesAsync("ch-5"))
+                .ReturnsAsync(new ChapterPages
+                {
+                    ForeignChapterId = "ch-5",
+                    PageUrls = new List<string>()
+                });
+
+            Mocker.GetMock<IDiskProvider>()
+                .Setup(x => x.FolderExists(It.IsAny<string>()))
+                .Returns(true);
+
+            var result = await Subject.DownloadChapterAsync("/output", _series, _volume, chapter);
+
+            Assert.That(result, Is.Null);
+
+            Mocker.GetMock<ICbzCreator>()
+                .Verify(x => x.CreateCbzFromChapterAsync(
+                    It.IsAny<string>(), It.IsAny<MangaSeries>(),
+                    It.IsAny<Volume>(), It.IsAny<Chapter>(), It.IsAny<List<string>>()),
+                    Times.Never());
+
+            Mocker.GetMock<IMangaFileService>()
+                .Verify(x => x.Add(It.IsAny<MangaFile>()), Times.Never());
+        }
+
+        [Test]
+        public async Task download_chapter_should_return_null_when_page_urls_is_null()
+        {
+            var chapter = new Chapter
+            {
+                ForeignChapterId = "ch-6",
+                ChapterNumber = 6,
+                PageCount = 0
+            };
+
+            Mocker.GetMock<IMangaMetadataConnector>()
+                .Setup(x => x.GetChapterPagesAsync("ch-6"))
+                .ReturnsAsync(new ChapterPages
+                {
+                    ForeignChapterId = "ch-6",
+                    PageUrls = null
+                });
+
+            Mocker.GetMock<IDiskProvider>()
+                .Setup(x => x.FolderExists(It.IsAny<string>()))
+                .Returns(true);
+
+            var result = await Subject.DownloadChapterAsync("/output", _series, _volume, chapter);
+
+            Assert.That(result, Is.Null);
+
+            Mocker.GetMock<IMangaFileService>()
+                .Verify(x => x.Add(It.IsAny<MangaFile>()), Times.Never());
+        }
+
+        [Test]
         public async Task download_volume_should_clean_temp_dir_on_page_failure()
         {
             Mocker.GetMock<IMangaMetadataConnector>()

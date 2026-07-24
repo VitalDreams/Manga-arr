@@ -249,6 +249,12 @@ namespace NzbDrone.Core.Manga
 
         private async Task<List<string>> DownloadPagesAsync(string tempDir, decimal chapterNumber, ChapterPages pages)
         {
+            if (pages?.PageUrls == null || pages.PageUrls.Count == 0)
+            {
+                _logger.Error("Chapter {0} download aborted: no page URLs returned", chapterNumber);
+                return null;
+            }
+
             _diskProvider.EnsureFolder(tempDir);
 
             var imagePaths = new List<string>();
