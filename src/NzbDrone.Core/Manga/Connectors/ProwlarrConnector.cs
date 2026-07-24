@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Http;
 using NzbDrone.Core.Indexers;
+using NzbDrone.Core.Indexers.Newznab;
 
 namespace NzbDrone.Core.Manga.Connectors
 {
@@ -28,16 +29,101 @@ namespace NzbDrone.Core.Manga.Connectors
     public class ProwlarrConnector : IProwlarrConnector
     {
         private readonly IHttpClient _httpClient;
+        private readonly IIndexerFactory _indexerFactory;
         private readonly Logger _logger;
 
-        public string BaseUrl { get; set; }
-        public string ApiKey { get; set; }
-        public bool IsConfigured => !string.IsNullOrEmpty(BaseUrl) && !string.IsNullOrEmpty(ApiKey);
+        private string _serverUrl;
+        private string _apiKey;
+        private Dictionary<string, DownloadProtocol> _indexerProtocols;
+        private bool _initialized;
 
-        public ProwlarrConnector(IHttpClient httpClient, Logger logger)
+        public bool IsConfigured
+        {
+            get
+            {
+                EnsureInitialized();
+                return !string.IsNullOrEmpty(_serverUrl) && !string.IsNullOrEmpty(_apiKey);
+            }
+        }
+
+        public ProwlarrConnector(IHttpClient httpClient, IIndexerFactory indexerFactory, Logger logger)
         {
             _httpClient = httpClient;
+            _indexerFactory = indexerFactory;
             _logger = logger;
+        }
+
+        private void EnsureInitialized()
+        {
+            if (_initialized)
+            {
+                return;
+            }
+
+            _initialized = true;
+
+            try
+            {
+                var definitions = _indexerFactory.All();
+                var protocols = new Dictionary<string, DownloadProtocol>(StringComparer.OrdinalIgnoreCase);
+                string serverUrl = null;
+                string apiKey = null;
+
+                foreach (var definition in definitions)
+                {
+                    if (!(definition.Settings is NewznabSettings settings))
+                    {
+                        continue;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(settings.BaseUrl) || string.IsNullOrWhiteSpace(settings.ApiKey))
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        var baseUri = new Uri(settings.BaseUrl.EndsWith("/") ? settings.BaseUrl : settings.BaseUrl + "/");
+                        var serverRoot = $"{baseUri.Scheme}://{baseUri.Authority}";
+
+                        if (serverUrl == null)
+                        {
+                            serverUrl = serverRoot;
+                            apiKey = settings.ApiKey;
+                        }
+                    }
+                    catch
+                    {
+                        _logger.Debug("Skipping indexer {0} with invalid BaseUrl: {1}", definition.Name, settings.BaseUrl);
+                        continue;
+                    }
+
+                    var protocol = string.Equals(definition.Implementation, "Newznab", StringComparison.OrdinalIgnoreCase)
+                        ? DownloadProtocol.Usenet
+                        : DownloadProtocol.Torrent;
+
+                    if (!protocols.ContainsKey(definition.Name))
+                    {
+                        protocols[definition.Name] = protocol;
+                    }
+                }
+
+                if (protocols.Any())
+                {
+                    _serverUrl = serverUrl;
+                    _apiKey = apiKey;
+                    _indexerProtocols = protocols;
+                    _logger.Info("Prowlarr connector configured from {0} indexer definition(s), server: {1}", protocols.Count, _serverUrl);
+                }
+                else
+                {
+                    _logger.Debug("No Prowlarr indexer definitions found in configuration");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to initialize Prowlarr connector from indexer definitions");
+            }
         }
 
         /// <summary>
@@ -54,24 +140,42 @@ namespace NzbDrone.Core.Manga.Connectors
 
             try
             {
-                _logger.Info($"Searching Prowlarr for: {query}");
+                _logger.Info("Searching Prowlarr for: {0}", query);
 
-                // Search both Comics and Books categories
-                var url = $"{BaseUrl}/api/v1/search?query={Uri.EscapeDataString(query)}&categories=7030,7000&limit=25";
+                var allResults = new List<ProwlarrSearchResult>();
 
-                var request = new HttpRequestBuilder(url)
-                    .SetHeader("X-Api-Key", ApiKey)
-                    .Build();
+                foreach (var route in _indexerProtocols)
+                {
+                    try
+                    {
+                        var url = $"{_serverUrl}/api/v1/search?query={Uri.EscapeDataString(query)}&categories=7030,7000&indexer={Uri.EscapeDataString(route.Key)}&limit=25";
 
-                var response = await _httpClient.GetAsync(request);
-                var results = ParseSearchResults(response.Content);
+                        var request = new HttpRequestBuilder(url)
+                            .SetHeader("X-Api-Key", _apiKey)
+                            .Build();
 
-                _logger.Info($"Prowlarr returned {results.Count} results for '{query}'");
-                return results;
+                        var response = await _httpClient.GetAsync(request);
+                        var results = ParseSearchResults(response.Content);
+
+                        foreach (var r in results)
+                        {
+                            r.Protocol = route.Value;
+                        }
+
+                        allResults.AddRange(results);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Debug(ex, "Failed to search Prowlarr indexer {0}", route.Key);
+                    }
+                }
+
+                _logger.Info("Prowlarr returned {0} results for '{1}'", allResults.Count, query);
+                return allResults;
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, $"Failed to search Prowlarr for '{query}'");
+                _logger.Error(ex, "Failed to search Prowlarr for '{0}'", query);
                 return new List<ProwlarrSearchResult>();
             }
         }
@@ -81,13 +185,16 @@ namespace NzbDrone.Core.Manga.Connectors
         /// </summary>
         public async Task<ProwlarrSearchResult> GetByIdAsync(string indexerId, string id)
         {
-            if (!IsConfigured) return null;
+            if (!IsConfigured)
+            {
+                return null;
+            }
 
             try
             {
-                var url = $"{BaseUrl}/api/v1/{indexerId}/search?id={id}";
+                var url = $"{_serverUrl}/api/v1/{indexerId}/search?id={id}";
                 var request = new HttpRequestBuilder(url)
-                    .SetHeader("X-Api-Key", ApiKey)
+                    .SetHeader("X-Api-Key", _apiKey)
                     .Build();
 
                 var response = await _httpClient.GetAsync(request);
@@ -96,7 +203,7 @@ namespace NzbDrone.Core.Manga.Connectors
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, $"Failed to get release {id} from indexer {indexerId}");
+                _logger.Error(ex, "Failed to get release {0} from indexer {1}", id, indexerId);
                 return null;
             }
         }
@@ -106,13 +213,16 @@ namespace NzbDrone.Core.Manga.Connectors
         /// </summary>
         public async Task<List<ProwlarrIndexer>> GetIndexersAsync()
         {
-            if (!IsConfigured) return new List<ProwlarrIndexer>();
+            if (!IsConfigured)
+            {
+                return new List<ProwlarrIndexer>();
+            }
 
             try
             {
-                var url = $"{BaseUrl}/api/v1/indexer";
+                var url = $"{_serverUrl}/api/v1/indexer";
                 var request = new HttpRequestBuilder(url)
-                    .SetHeader("X-Api-Key", ApiKey)
+                    .SetHeader("X-Api-Key", _apiKey)
                     .Build();
 
                 var response = await _httpClient.GetAsync(request);
@@ -210,10 +320,19 @@ namespace NzbDrone.Core.Manga.Connectors
         }
 
         /// <summary>
-        /// Determine the download protocol for a Prowlarr result
+        /// Determine the download protocol for a Prowlarr result.
+        /// Checks the indexer→protocol map first (reliable for Newznab/Usenet),
+        /// then falls back to URL and category heuristics.
         /// </summary>
         public DownloadProtocol GetDownloadProtocol(ProwlarrSearchResult result)
         {
+            // Check indexer→protocol map first (most reliable)
+            if (_indexerProtocols != null && !string.IsNullOrEmpty(result.Indexer) &&
+                _indexerProtocols.TryGetValue(result.Indexer, out var mappedProtocol))
+            {
+                return mappedProtocol;
+            }
+
             // Check for magnet link (torrent)
             if (!string.IsNullOrEmpty(result.MagnetUrl))
             {
@@ -372,13 +491,10 @@ namespace NzbDrone.Core.Manga.Connectors
 
         private List<ProwlarrSearchResult> ParseSearchResults(string json)
         {
-            // Parse Prowlarr JSON response
-            // This is a simplified parser - in production, use proper JSON deserialization
             var results = new List<ProwlarrSearchResult>();
 
             try
             {
-                // Use System.Text.Json for proper parsing
                 var options = new System.Text.Json.JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
@@ -411,7 +527,7 @@ namespace NzbDrone.Core.Manga.Connectors
             }
             catch (Exception ex)
             {
-                _logger.Warn($"Failed to parse Prowlarr results: {ex.Message}");
+                _logger.Warn("Failed to parse Prowlarr results: {0}", ex.Message);
             }
 
             return results;
@@ -443,7 +559,7 @@ namespace NzbDrone.Core.Manga.Connectors
             }
             catch (Exception ex)
             {
-                _logger.Warn($"Failed to parse Prowlarr indexers: {ex.Message}");
+                _logger.Warn("Failed to parse Prowlarr indexers: {0}", ex.Message);
             }
 
             return indexers;

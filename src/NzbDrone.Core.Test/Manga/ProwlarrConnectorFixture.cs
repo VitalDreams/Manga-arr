@@ -1,0 +1,306 @@
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Moq;
+using NUnit.Framework;
+using NzbDrone.Common.Http;
+using NzbDrone.Core.Indexers;
+using NzbDrone.Core.Indexers.Newznab;
+using NzbDrone.Core.Manga.Connectors;
+using NzbDrone.Core.Test.Framework;
+using NzbDrone.Test.Common;
+
+namespace NzbDrone.Core.Test.Manga
+{
+    [TestFixture]
+    public class ProwlarrConnectorFixture : CoreTest<ProwlarrConnector>
+    {
+        private void SetupIndexerFactory(params IndexerDefinition[] definitions)
+        {
+            Mocker.GetMock<IIndexerFactory>()
+                .Setup(x => x.All())
+                .Returns(new List<IndexerDefinition>(definitions));
+        }
+
+        private static IndexerDefinition MakeNewznabDefinition(string name, string baseUrl, string apiKey)
+        {
+            return new IndexerDefinition
+            {
+                Name = name,
+                Implementation = "Newznab",
+                Settings = new NewznabSettings
+                {
+                    BaseUrl = baseUrl,
+                    ApiKey = apiKey,
+                    ApiPath = "/api",
+                    Categories = new[] { 7030 }
+                }
+            };
+        }
+
+        private static IndexerDefinition MakeTorznabDefinition(string name, string baseUrl, string apiKey)
+        {
+            return new IndexerDefinition
+            {
+                Name = name,
+                Implementation = "Torznab",
+                Settings = new TorznabSettings
+                {
+                    BaseUrl = baseUrl,
+                    ApiKey = apiKey,
+                    ApiPath = "/api",
+                    Categories = new[] { 7030 }
+                }
+            };
+        }
+
+        [Test]
+        public void is_configured_should_be_false_when_no_indexers_exist()
+        {
+            SetupIndexerFactory();
+
+            Assert.That(Subject.IsConfigured, Is.False);
+        }
+
+        [Test]
+        public void is_configured_should_be_false_when_no_prowlarr_indexers_exist()
+        {
+            SetupIndexerFactory(
+                new IndexerDefinition
+                {
+                    Name = "Nyaa",
+                    Implementation = "Nyaa",
+                    Settings = new object()
+                });
+
+            Assert.That(Subject.IsConfigured, Is.False);
+        }
+
+        [Test]
+        public void is_configured_should_be_true_when_newznab_indexer_exists()
+        {
+            SetupIndexerFactory(
+                MakeNewznabDefinition("Prowlarr (Usenet)", "http://prowlarr:9696/9/", "test-api-key"));
+
+            Assert.That(Subject.IsConfigured, Is.True);
+        }
+
+        [Test]
+        public void is_configured_should_be_true_when_torznab_indexer_exists()
+        {
+            SetupIndexerFactory(
+                MakeTorznabDefinition("Prowlarr (Torrents)", "http://prowlarr:9696/1/", "test-api-key"));
+
+            Assert.That(Subject.IsConfigured, Is.True);
+        }
+
+        [Test]
+        public void is_configured_should_be_false_when_baseurl_is_empty()
+        {
+            SetupIndexerFactory(
+                MakeNewznabDefinition("Prowlarr (Usenet)", "", "test-api-key"));
+
+            Assert.That(Subject.IsConfigured, Is.False);
+        }
+
+        [Test]
+        public void is_configured_should_be_false_when_apikey_is_empty()
+        {
+            SetupIndexerFactory(
+                MakeNewznabDefinition("Prowlarr (Usenet)", "http://prowlarr:9696/9/", ""));
+
+            Assert.That(Subject.IsConfigured, Is.False);
+        }
+
+        [Test]
+        public void get_download_protocol_should_return_usenet_for_newznab_indexer()
+        {
+            SetupIndexerFactory(
+                MakeNewznabDefinition("NZBgeek", "http://prowlarr:9696/9/", "test-api-key"),
+                MakeTorznabDefinition("Nyaa", "http://prowlarr:9696/1/", "test-api-key"));
+
+            // Trigger initialization
+            Assert.That(Subject.IsConfigured, Is.True);
+
+            var result = new ProwlarrSearchResult
+            {
+                Title = "Berserk Vol 1",
+                Indexer = "NZBgeek",
+                DownloadUrl = "http://prowlarr:9696/9/api?t=get&id=abc123"
+            };
+
+            Assert.That(Subject.GetDownloadProtocol(result), Is.EqualTo(DownloadProtocol.Usenet));
+        }
+
+        [Test]
+        public void get_download_protocol_should_return_torrent_for_torznab_indexer()
+        {
+            SetupIndexerFactory(
+                MakeNewznabDefinition("NZBgeek", "http://prowlarr:9696/9/", "test-api-key"),
+                MakeTorznabDefinition("Nyaa", "http://prowlarr:9696/1/", "test-api-key"));
+
+            // Trigger initialization
+            Assert.That(Subject.IsConfigured, Is.True);
+
+            var result = new ProwlarrSearchResult
+            {
+                Title = "Berserk Vol 1",
+                Indexer = "Nyaa",
+                DownloadUrl = "http://prowlarr:9696/1/api?t=get&id=abc123"
+            };
+
+            Assert.That(Subject.GetDownloadProtocol(result), Is.EqualTo(DownloadProtocol.Torrent));
+        }
+
+        [Test]
+        public void get_download_protocol_should_fall_back_to_url_heuristics_for_unknown_indexer()
+        {
+            SetupIndexerFactory(
+                MakeNewznabDefinition("NZBgeek", "http://prowlarr:9696/9/", "test-api-key"));
+
+            // Trigger initialization
+            Assert.That(Subject.IsConfigured, Is.True);
+
+            var result = new ProwlarrSearchResult
+            {
+                Title = "Berserk Vol 1",
+                Indexer = "SomeUnknownIndexer",
+                DownloadUrl = "http://example.com/release.nzb"
+            };
+
+            Assert.That(Subject.GetDownloadProtocol(result), Is.EqualTo(DownloadProtocol.Usenet));
+        }
+
+        [Test]
+        public void get_download_protocol_should_detect_torrent_from_magnet_url()
+        {
+            SetupIndexerFactory(
+                MakeTorznabDefinition("Nyaa", "http://prowlarr:9696/1/", "test-api-key"));
+
+            // Trigger initialization
+            Assert.That(Subject.IsConfigured, Is.True);
+
+            var result = new ProwlarrSearchResult
+            {
+                Title = "Berserk Vol 1",
+                Indexer = "SomeUnknownIndexer",
+                MagnetUrl = "magnet:?xt=urn:btih:abc123"
+            };
+
+            Assert.That(Subject.GetDownloadProtocol(result), Is.EqualTo(DownloadProtocol.Torrent));
+        }
+
+        [Test]
+        public void search_should_query_each_indexer_separately()
+        {
+            SetupIndexerFactory(
+                MakeNewznabDefinition("NZBgeek", "http://prowlarr:9696/9/", "test-api-key"),
+                MakeTorznabDefinition("Nyaa", "http://prowlarr:9696/1/", "test-api-key"));
+
+            Mocker.GetMock<IHttpClient>()
+                .Setup(x => x.GetAsync(It.IsAny<HttpRequest>()))
+                .ReturnsAsync(new HttpResponse(
+                    new HttpRequest(HttpMethod.Get, "http://localhost"),
+                    new HttpHeader(),
+                    "[]",
+                    System.Net.HttpStatusCode.OK));
+
+            var results = Subject.SearchAsync("Berserk Vol 1").GetAwaiter().GetResult();
+
+            // Should have made 2 HTTP calls (one per indexer)
+            Mocker.GetMock<IHttpClient>()
+                .Verify(x => x.GetAsync(It.Is<HttpRequest>(r =>
+                    r.Url.ToString().Contains("indexer=NZBgeek"))), Times.Once);
+            Mocker.GetMock<IHttpClient>()
+                .Verify(x => x.GetAsync(It.Is<HttpRequest>(r =>
+                    r.Url.ToString().Contains("indexer=Nyaa"))), Times.Once);
+        }
+
+        [Test]
+        public void search_should_return_empty_when_not_configured()
+        {
+            SetupIndexerFactory();
+
+            var results = Subject.SearchAsync("Berserk Vol 1").GetAwaiter().GetResult();
+
+            Assert.That(results, Is.Empty);
+        }
+
+        [Test]
+        public void search_manga_volume_packs_should_prioritize_usenet_over_torrent()
+        {
+            SetupIndexerFactory(
+                MakeNewznabDefinition("NZBgeek", "http://prowlarr:9696/9/", "test-api-key"),
+                MakeTorznabDefinition("Nyaa", "http://prowlarr:9696/1/", "test-api-key"));
+
+            // First call (NZBgeek) returns Usenet result
+            var usenetResponse = @"[{
+                ""guid"": ""usenet-1"",
+                ""title"": ""Berserk Vol 1"",
+                ""size"": 450000000,
+                ""downloadUrl"": ""http://prowlarr:9696/9/api?t=get&id=nzb1"",
+                ""indexer"": ""NZBgeek"",
+                ""categories"": [{""id"": 7030, ""name"": ""Comics""}],
+                ""seeders"": 0,
+                ""peers"": 0,
+                ""publishDate"": ""2024-01-01T00:00:00Z""
+            }]";
+
+            // Second call (Nyaa) returns Torrent result with seeders
+            var torrentResponse = @"[{
+                ""guid"": ""torrent-1"",
+                ""title"": ""Berserk Vol 1 [torrent]"",
+                ""size"": 500000000,
+                ""downloadUrl"": ""http://prowlarr:9696/1/api?t=get&id=tor1"",
+                ""indexer"": ""Nyaa"",
+                ""categories"": [{""id"": 7030, ""name"": ""Comics""}],
+                ""seeders"": 50,
+                ""peers"": 10,
+                ""publishDate"": ""2024-01-01T00:00:00Z""
+            }]";
+
+            var callCount = 0;
+            Mocker.GetMock<IHttpClient>()
+                .Setup(x => x.GetAsync(It.IsAny<HttpRequest>()))
+                .ReturnsAsync(() =>
+                {
+                    callCount++;
+                    var content = callCount == 1 ? usenetResponse : torrentResponse;
+                    return new HttpResponse(
+                        new HttpRequest(HttpMethod.Get, "http://localhost"),
+                        new HttpHeader(),
+                        content,
+                        System.Net.HttpStatusCode.OK);
+                });
+
+            var results = Subject.SearchMangaVolumePacksAsync("Berserk", 1).GetAwaiter().GetResult();
+
+            Assert.That(results.Count, Is.EqualTo(2));
+            // Usenet should be first despite having 0 seeders
+            Assert.That(results[0].Protocol, Is.EqualTo(DownloadProtocol.Usenet));
+            Assert.That(results[0].Indexer, Is.EqualTo("NZBgeek"));
+            Assert.That(results[1].Protocol, Is.EqualTo(DownloadProtocol.Torrent));
+        }
+
+        [Test]
+        public void search_should_use_api_key_from_indexer_settings()
+        {
+            var apiKey = "f8ece1e648c44b53b58bdf9da2ccf294";
+            SetupIndexerFactory(
+                MakeNewznabDefinition("NZBgeek", "http://prowlarr:9696/9/", apiKey));
+
+            Mocker.GetMock<IHttpClient>()
+                .Setup(x => x.GetAsync(It.IsAny<HttpRequest>()))
+                .ReturnsAsync(new HttpResponse(
+                    new HttpRequest(HttpMethod.Get, "http://localhost"),
+                    new HttpHeader(),
+                    "[]",
+                    System.Net.HttpStatusCode.OK));
+
+            Subject.SearchAsync("test").GetAwaiter().GetResult();
+
+            Mocker.GetMock<IHttpClient>()
+                .Verify(x => x.GetAsync(It.Is<HttpRequest>(r =>
+                    r.Headers.Get("X-Api-Key") == apiKey)), Times.Once);
+        }
+    }
+}
