@@ -336,8 +336,8 @@ namespace Readarr.Api.V1.Manga
             }
         }
 
-        [HttpPost("{id}/search/{volumeId}")]
-        public async Task<ActionResult<MangaSearchAndDownloadResult>> SearchVolume(int id, int volumeId)
+        [HttpPost("{id}/search/{bookId}")]
+        public async Task<ActionResult<MangaSearchAndDownloadResult>> SearchVolume(int id, int bookId)
         {
             var author = _authorService.GetAuthor(id);
             if (author == null)
@@ -345,10 +345,10 @@ namespace Readarr.Api.V1.Manga
                 return NotFound();
             }
 
-            var book = _bookService.GetBook(volumeId);
+            var book = _bookService.GetBook(bookId);
             if (book == null || book.AuthorId != id)
             {
-                return NotFound($"Volume {volumeId} not found for manga {id}");
+                return NotFound($"Book {bookId} not found for manga {id}");
             }
 
             var volumeNumber = ExtractVolumeNumber(book.Title) ?? ExtractVolumeNumber(book.ForeignBookId);

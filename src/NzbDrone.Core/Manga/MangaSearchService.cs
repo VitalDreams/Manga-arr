@@ -22,6 +22,7 @@ namespace NzbDrone.Core.Manga
         private readonly IProwlarrConnector _prowlarrConnector;
         private readonly IMangaDexDownloader _mangaDexDownloader;
         private readonly IMangaDownloadService _downloadService;
+        private readonly IVolumeRepository _volumeRepository;
         private readonly IKomgaIntegration _komga;
         private readonly INotificationService _notifications;
         private readonly Logger _logger;
@@ -32,6 +33,7 @@ namespace NzbDrone.Core.Manga
             IProwlarrConnector prowlarrConnector,
             IMangaDexDownloader mangaDexDownloader,
             IMangaDownloadService downloadService,
+            IVolumeRepository volumeRepository,
             IKomgaIntegration komga,
             INotificationService notifications,
             Logger logger)
@@ -41,6 +43,7 @@ namespace NzbDrone.Core.Manga
             _prowlarrConnector = prowlarrConnector;
             _mangaDexDownloader = mangaDexDownloader;
             _downloadService = downloadService;
+            _volumeRepository = volumeRepository;
             _komga = komga;
             _notifications = notifications;
             _logger = logger;
@@ -90,11 +93,12 @@ namespace NzbDrone.Core.Manga
                             continue;
                         }
 
-                        var volume = new Volume
-                        {
-                            VolumeNumber = volNum,
-                            Title = $"{series.Name} Vol. {volNum:000}"
-                        };
+                        var volume = _volumeRepository.FindBySeriesAndVolumeNumber(seriesId, volNum)
+                            ?? new Volume
+                            {
+                                VolumeNumber = volNum,
+                                Title = $"{series.Name} Vol. {volNum:000}"
+                            };
 
                         // Step 4: Use MangaDexDownloader to download directly
                         _logger.Info("Downloading volume {0} from MangaDex...", volNum);
@@ -142,11 +146,12 @@ namespace NzbDrone.Core.Manga
 
                     foreach (var volNum in volumesToDownload)
                     {
-                        var volume = new Volume
-                        {
-                            VolumeNumber = volNum,
-                            Title = $"{series.Name} Vol. {volNum:000}"
-                        };
+                        var volume = _volumeRepository.FindBySeriesAndVolumeNumber(seriesId, volNum)
+                            ?? new Volume
+                            {
+                                VolumeNumber = volNum,
+                                Title = $"{series.Name} Vol. {volNum:000}"
+                            };
 
                         var prowlarrResult = await TryProwlarrFallbackAsync(series, volume, volNum);
                         if (prowlarrResult != null)

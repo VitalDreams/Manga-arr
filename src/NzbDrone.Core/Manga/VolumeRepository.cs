@@ -9,6 +9,7 @@ namespace NzbDrone.Core.Manga
     {
         List<Volume> FindByMangaSeriesId(int mangaSeriesId);
         Volume FindByForeignVolumeId(string foreignVolumeId);
+        Volume FindBySeriesAndVolumeNumber(int mangaSeriesId, int volumeNumber);
     }
 
     public class VolumeRepository : BasicRepository<Volume>, IVolumeRepository
@@ -26,6 +27,11 @@ namespace NzbDrone.Core.Manga
         public Volume FindByForeignVolumeId(string foreignVolumeId)
         {
             return Query(x => x.ForeignVolumeId == foreignVolumeId).FirstOrDefault();
+        }
+
+        public Volume FindBySeriesAndVolumeNumber(int mangaSeriesId, int volumeNumber)
+        {
+            return Query(x => x.MangaSeriesId == mangaSeriesId && x.VolumeNumber == volumeNumber).FirstOrDefault();
         }
     }
 }
