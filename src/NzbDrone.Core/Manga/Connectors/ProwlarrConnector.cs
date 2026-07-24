@@ -148,7 +148,7 @@ namespace NzbDrone.Core.Manga.Connectors
                 {
                     try
                     {
-                        var url = $"{_serverUrl}/api/v1/search?query={Uri.EscapeDataString(query)}&categories=7030,7000&indexer={Uri.EscapeDataString(route.Key)}&limit=25";
+                        var url = $"{_serverUrl}/api/v1/search?query={Uri.EscapeDataString(query)}&categories=7030&categories=7000&indexer={Uri.EscapeDataString(route.Key)}&limit=25";
 
                         var request = new HttpRequestBuilder(url)
                             .SetHeader("X-Api-Key", _apiKey)
@@ -159,7 +159,15 @@ namespace NzbDrone.Core.Manga.Connectors
 
                         foreach (var r in results)
                         {
-                            r.Protocol = route.Value;
+                            // Tag with the indexer we queried (API responses don't always echo it back),
+                            // then re-derive protocol so an unambiguous torrent/magnet payload can never
+                            // be reported as Usenet just because the route we queried is labeled Newznab.
+                            if (string.IsNullOrEmpty(r.Indexer))
+                            {
+                                r.Indexer = route.Key;
+                            }
+
+                            r.Protocol = GetDownloadProtocol(r);
                         }
 
                         allResults.AddRange(results);
@@ -281,6 +289,11 @@ namespace NzbDrone.Core.Manga.Connectors
 
             filtered = FilterByTitleAndVolume(filtered, mangaTitle, volumeNumber);
 
+            // Drop results with no usable download link (nothing to hand to the download client)
+            filtered = filtered
+                .Where(r => !string.IsNullOrEmpty(r.MagnetUrl) || !string.IsNullOrEmpty(r.DownloadUrl))
+                .ToList();
+
             // Protocol-aware sort: Usenet has zero seeders by design, so boost
             // Usenet results alongside torrent results with seeders.
             filtered = filtered
@@ -321,25 +334,22 @@ namespace NzbDrone.Core.Manga.Connectors
 
         /// <summary>
         /// Determine the download protocol for a Prowlarr result.
-        /// Checks the indexer→protocol map first (reliable for Newznab/Usenet),
-        /// then falls back to URL and category heuristics.
+        /// Unambiguous payload signals (magnet link, .torrent URL, .nzb URL) are checked
+        /// first because they can't lie — a misconfigured or proxying indexer can be
+        /// labeled Newznab/Usenet (or Torznab/Torrent) in its definition while still
+        /// handing back the opposite payload, and trusting the label in that case would
+        /// send the wrong kind of link to the download client.
+        /// Only once the payload gives no signal do we fall back to the indexer→protocol
+        /// map, then category heuristics.
         /// </summary>
         public DownloadProtocol GetDownloadProtocol(ProwlarrSearchResult result)
         {
-            // Check indexer→protocol map first (most reliable)
-            if (_indexerProtocols != null && !string.IsNullOrEmpty(result.Indexer) &&
-                _indexerProtocols.TryGetValue(result.Indexer, out var mappedProtocol))
-            {
-                return mappedProtocol;
-            }
-
-            // Check for magnet link (torrent)
+            // Payload signals first (most trustworthy - can't be misconfigured)
             if (!string.IsNullOrEmpty(result.MagnetUrl))
             {
                 return DownloadProtocol.Torrent;
             }
 
-            // Check download URL for protocol hints
             if (!string.IsNullOrEmpty(result.DownloadUrl))
             {
                 var url = result.DownloadUrl.ToLowerInvariant();
@@ -353,6 +363,13 @@ namespace NzbDrone.Core.Manga.Connectors
                 {
                     return DownloadProtocol.Usenet;
                 }
+            }
+
+            // Check indexer→protocol map (reliable for correctly-configured Newznab/Torznab indexers)
+            if (_indexerProtocols != null && !string.IsNullOrEmpty(result.Indexer) &&
+                _indexerProtocols.TryGetValue(result.Indexer, out var mappedProtocol))
+            {
+                return mappedProtocol;
             }
 
             // Check categories for hints

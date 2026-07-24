@@ -819,5 +819,98 @@ namespace NzbDrone.Core.Test.Manga
                     It.IsAny<Volume>()),
                     Times.Once());
         }
+
+        [Test]
+        public async Task prowlarr_fallback_should_select_usenet_when_only_usenet_available()
+        {
+            // Different manhwa series entirely - proves the selection logic is generic,
+            // not tied to any specific title.
+            var manhwaSeries = new MangaSeries
+            {
+                Id = 99,
+                Name = "Solo Leveling",
+                Monitored = true,
+                ForeignMangaId = "b1c42e49-d6f5-4084-9cec-771f5660c911",
+                Path = "/manga/Solo Leveling",
+                RootFolderPath = "/manga"
+            };
+
+            var manhwaVolume1 = new Volume
+            {
+                Id = 2001,
+                VolumeNumber = 1,
+                Title = "Volume 1",
+                MangaSeriesId = 99,
+                Monitored = true
+            };
+
+            Mocker.GetMock<IMangaSeriesService>()
+                .Setup(x => x.GetSeries(99))
+                .Returns(manhwaSeries);
+
+            Mocker.GetMock<IVolumeRepository>()
+                .Setup(x => x.FindBySeriesAndVolumeNumber(99, 1))
+                .Returns(manhwaVolume1);
+
+            Mocker.GetMock<IMangaMetadataConnector>()
+                .Setup(x => x.GetVolumeChapterMapAsync(manhwaSeries.ForeignMangaId))
+                .ReturnsAsync(new VolumeChapterMap
+                {
+                    ForeignMangaId = manhwaSeries.ForeignMangaId,
+                    VolumeChapters = new Dictionary<int, List<string>>()
+                });
+
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.IsConfigured)
+                .Returns(true);
+
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.SearchMangaVolumePacksAsync("Solo Leveling", 1))
+                .ReturnsAsync(new List<ProwlarrSearchResult>
+                {
+                    new ProwlarrSearchResult
+                    {
+                        Title = "Solo Leveling Vol 1",
+                        DownloadUrl = "http://example.com/nzb",
+                        Seeders = 0,
+                        Size = 300_000_000,
+                        Protocol = DownloadProtocol.Usenet,
+                        Indexer = "NZBgeek"
+                    }
+                });
+
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.GetDownloadProtocol(It.IsAny<ProwlarrSearchResult>()))
+                .Returns(DownloadProtocol.Usenet);
+
+            Mocker.GetMock<IMangaDownloadService>()
+                .Setup(x => x.SendToDownloadClient(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<DownloadProtocol>(),
+                    It.IsAny<MangaSeries>(),
+                    It.IsAny<Volume>()))
+                .ReturnsAsync(new MangaDownloadResult
+                {
+                    Success = true,
+                    DownloadId = "nzb-solo-1",
+                    Title = "Solo Leveling Vol 1",
+                    Protocol = DownloadProtocol.Usenet,
+                    ClientName = "SABnzbd"
+                });
+
+            var result = await Subject.SearchAndDownloadAsync(99, 1);
+
+            Assert.That(result.Success, Is.True);
+
+            Mocker.GetMock<IMangaDownloadService>()
+                .Verify(x => x.SendToDownloadClient(
+                    It.IsAny<string>(),
+                    "http://example.com/nzb",
+                    DownloadProtocol.Usenet,
+                    manhwaSeries,
+                    It.IsAny<Volume>()),
+                    Times.Once());
+        }
     }
 }
