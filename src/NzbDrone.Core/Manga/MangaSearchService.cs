@@ -351,18 +351,14 @@ namespace NzbDrone.Core.Manga
                     return null;
                 }
 
-                // Pick the best result (protocol-aware, then seeders, then size)
+                // Pick the best result (protocol-aware, then seeders, then size).
+                // Usenet=1, Torrent=0, anything else=-1, so a valid Usenet/NZB release always
+                // wins when one exists, with torrent as the fallback when it doesn't.
                 var bestResult = validResults
-                    .Where(r => MangaReleaseFormatValidator.IsValidFormat(r.Title))
-                    .OrderByDescending(r => r.Protocol == DownloadProtocol.Usenet ? 1 : r.Protocol == DownloadProtocol.Torrent ? 0 : -1) // Usenet=1, Torrent=0, Others=-1
+                    .OrderByDescending(r => r.Protocol == DownloadProtocol.Usenet ? 1 : r.Protocol == DownloadProtocol.Torrent ? 0 : -1)
                     .ThenByDescending(r => r.Seeders)
                     .ThenByDescending(r => r.Size)
-                    .FirstOrDefault();
-                if (bestResult == null)
-                {
-                    _logger.Warn("No valid Prowlarr results for volume selection");
-                    return null;
-                }
+                    .First();
 
                 _logger.Info("Selected Prowlarr release: {0} (protocol: {1}, indexer: {2}, seeders: {3}, size: {4})",
                     bestResult.Title, bestResult.Protocol, bestResult.Indexer ?? "unknown", bestResult.Seeders, bestResult.Size);

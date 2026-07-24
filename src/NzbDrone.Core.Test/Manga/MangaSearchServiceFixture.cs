@@ -1090,5 +1090,101 @@ namespace NzbDrone.Core.Test.Manga
                     It.IsAny<Volume>()),
                     Times.Never());
         }
+
+        [Test]
+        public async Task prowlarr_fallback_should_skip_invalid_usenet_and_download_valid_torrent_instead()
+        {
+            Mocker.GetMock<IMangaSeriesService>()
+                .Setup(x => x.GetSeries(18))
+                .Returns(_series);
+
+            Mocker.GetMock<IVolumeRepository>()
+                .Setup(x => x.FindBySeriesAndVolumeNumber(18, 1))
+                .Returns(_volume1);
+
+            Mocker.GetMock<IMangaMetadataConnector>()
+                .Setup(x => x.GetVolumeChapterMapAsync(_series.ForeignMangaId))
+                .ReturnsAsync(new VolumeChapterMap
+                {
+                    ForeignMangaId = _series.ForeignMangaId,
+                    VolumeChapters = new Dictionary<int, List<string>>()
+                });
+
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.IsConfigured)
+                .Returns(true);
+
+            // Mirror of the audiobook-torrent-vs-valid-usenet case, but inverted: the only
+            // Usenet release is an invalid format (audiobook), while a valid manga torrent
+            // exists. Usenet priority must not override format validation - the invalid
+            // Usenet release must be skipped and the valid torrent selected as fallback.
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.SearchMangaVolumePacksAsync("Berserk", 1))
+                .ReturnsAsync(new List<ProwlarrSearchResult>
+                {
+                    new ProwlarrSearchResult
+                    {
+                        Title = "Berserk Vol 1 [m4b mp3] [AUDIOBOOK]",
+                        DownloadUrl = "http://example.com/audiobook.nzb",
+                        Seeders = 0,
+                        Size = 3000000000,
+                        Protocol = DownloadProtocol.Usenet,
+                        Indexer = "NZBgeek"
+                    },
+                    new ProwlarrSearchResult
+                    {
+                        Title = "Berserk Vol 1 [CBZ]",
+                        DownloadUrl = "http://example.com/valid.torrent",
+                        Seeders = 25,
+                        Size = 200000000,
+                        Protocol = DownloadProtocol.Torrent,
+                        Indexer = "Nyaa"
+                    }
+                });
+
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.GetDownloadProtocol(It.IsAny<ProwlarrSearchResult>()))
+                .Returns(DownloadProtocol.Torrent);
+
+            Mocker.GetMock<IMangaDownloadService>()
+                .Setup(x => x.SendToDownloadClient(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<DownloadProtocol>(),
+                    It.IsAny<MangaSeries>(),
+                    It.IsAny<Volume>()))
+                .ReturnsAsync(new MangaDownloadResult
+                {
+                    Success = true,
+                    DownloadId = "tor-valid-1",
+                    Title = "Berserk Vol 1 [CBZ]",
+                    Protocol = DownloadProtocol.Torrent,
+                    ClientName = "qBittorrent"
+                });
+
+            var result = await Subject.SearchAndDownloadAsync(18, 1);
+
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.DownloadedVolumes[0].Source, Is.EqualTo("Prowlarr"));
+
+            Mocker.GetMock<IMangaDownloadService>()
+                .Verify(x => x.SendToDownloadClient(
+                    It.IsAny<string>(),
+                    "http://example.com/valid.torrent",
+                    DownloadProtocol.Torrent,
+                    _series,
+                    It.IsAny<Volume>()),
+                    Times.Once());
+
+            // The invalid audiobook NZB must never be sent to the download client
+            Mocker.GetMock<IMangaDownloadService>()
+                .Verify(x => x.SendToDownloadClient(
+                    It.IsAny<string>(),
+                    "http://example.com/audiobook.nzb",
+                    It.IsAny<DownloadProtocol>(),
+                    It.IsAny<MangaSeries>(),
+                    It.IsAny<Volume>()),
+                    Times.Never());
+        }
     }
 }
