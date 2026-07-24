@@ -159,8 +159,15 @@ namespace NzbDrone.Core.Test.Download.CompletedDownloadServiceTests
         }
 
         [Test]
-        public void should_not_mark_as_failed_if_nothing_found_to_import()
+        public void should_not_mark_as_failed_if_nothing_found_to_import_but_path_still_exists()
         {
+            // The output path is still present on disk (e.g. the download client is still
+            // writing/extracting files) - nothing importable yet is not the same as never
+            // going to be importable, so this must keep retrying rather than give up.
+            Mocker.GetMock<IDiskProvider>()
+                .Setup(d => d.FolderExists(It.IsAny<string>()))
+                .Returns(true);
+
             Mocker.GetMock<IDownloadedBooksImportService>()
                 .Setup(v => v.ProcessPath(It.IsAny<string>(), It.IsAny<ImportMode>(), It.IsAny<Author>(), It.IsAny<DownloadClientItem>()))
                 .Returns(new List<ImportResult>());
@@ -168,6 +175,31 @@ namespace NzbDrone.Core.Test.Download.CompletedDownloadServiceTests
             Subject.Import(_trackedDownload);
 
             _trackedDownload.State.Should().Be(TrackedDownloadState.ImportPending);
+        }
+
+        [Test]
+        public void should_mark_as_failed_if_output_path_no_longer_exists_on_disk()
+        {
+            // Reproduces the live bug: a download client reports an item as Completed and
+            // ImportPending forever, but the output path was actually deleted from disk (e.g. the
+            // download was removed/cleaned up elsewhere). Retrying every RefreshMonitoredDownloads
+            // tick (every minute) can never succeed for a path that is permanently gone, so this
+            // must give up instead of looping forever.
+            Mocker.GetMock<IDiskProvider>()
+                .Setup(d => d.FolderExists(It.IsAny<string>()))
+                .Returns(false);
+
+            Mocker.GetMock<IDiskProvider>()
+                .Setup(d => d.FileExists(It.IsAny<string>()))
+                .Returns(false);
+
+            Mocker.GetMock<IDownloadedBooksImportService>()
+                .Setup(v => v.ProcessPath(It.IsAny<string>(), It.IsAny<ImportMode>(), It.IsAny<Author>(), It.IsAny<DownloadClientItem>()))
+                .Returns(new List<ImportResult>());
+
+            Subject.Import(_trackedDownload);
+
+            _trackedDownload.State.Should().Be(TrackedDownloadState.ImportFailed);
         }
 
         [Test]

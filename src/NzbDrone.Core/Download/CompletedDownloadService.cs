@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using NLog;
+using NzbDrone.Common.Disk;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Common.Instrumentation.Extensions;
@@ -29,6 +30,7 @@ namespace NzbDrone.Core.Download
         private readonly IProvideImportItemService _provideImportItemService;
         private readonly IDownloadedBooksImportService _downloadedTracksImportService;
         private readonly ITrackedDownloadAlreadyImported _trackedDownloadAlreadyImported;
+        private readonly IDiskProvider _diskProvider;
         private readonly Logger _logger;
 
         public CompletedDownloadService(IEventAggregator eventAggregator,
@@ -36,6 +38,7 @@ namespace NzbDrone.Core.Download
                                         IProvideImportItemService provideImportItemService,
                                         IDownloadedBooksImportService downloadedTracksImportService,
                                         ITrackedDownloadAlreadyImported trackedDownloadAlreadyImported,
+                                        IDiskProvider diskProvider,
                                         Logger logger)
         {
             _eventAggregator = eventAggregator;
@@ -43,6 +46,7 @@ namespace NzbDrone.Core.Download
             _provideImportItemService = provideImportItemService;
             _downloadedTracksImportService = downloadedTracksImportService;
             _trackedDownloadAlreadyImported = trackedDownloadAlreadyImported;
+            _diskProvider = diskProvider;
             _logger = logger;
         }
 
@@ -93,6 +97,19 @@ namespace NzbDrone.Core.Download
 
             if (importResults.Empty())
             {
+                // A path that no longer exists on disk at all will never produce importable files
+                // no matter how many times we retry - give up instead of retrying forever on every
+                // RefreshMonitoredDownloads tick (every minute) and spamming the log. A path that
+                // still exists but currently has nothing importable (e.g. still being written or
+                // extracted by the download client) keeps retrying as before, since the file may
+                // simply not be visible yet.
+                if (!_diskProvider.FolderExists(outputPath) && !_diskProvider.FileExists(outputPath))
+                {
+                    trackedDownload.Warn("Import path no longer exists, giving up: {0}", outputPath);
+                    trackedDownload.State = TrackedDownloadState.ImportFailed;
+                    return;
+                }
+
                 trackedDownload.Warn("No files found are eligible for import in {0}", outputPath);
                 trackedDownload.State = TrackedDownloadState.ImportPending;
                 return;
