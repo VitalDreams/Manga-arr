@@ -281,9 +281,10 @@ namespace NzbDrone.Core.Manga.Connectors
                 }
             }
 
-            // Deduplicate by title and filter for relevance
+            // Deduplicate by title AND protocol so that an NZB and a torrent with
+            // the same title are both preserved for the protocol-aware sort below.
             var filtered = allResults
-                .GroupBy(r => r.Title, StringComparer.OrdinalIgnoreCase)
+                .GroupBy(r => new { Title = r.Title?.ToLowerInvariant(), r.Protocol })
                 .Select(g => g.First())
                 .ToList();
 

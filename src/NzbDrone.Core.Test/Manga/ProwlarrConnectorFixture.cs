@@ -351,5 +351,51 @@ namespace NzbDrone.Core.Test.Manga
             Assert.That(results, Has.Count.EqualTo(1));
             Assert.That(results[0].Title, Is.EqualTo("Solo Leveling Vol 1 [CBZ]"));
         }
+
+        [Test]
+        public async Task search_manga_volume_packs_should_preserve_same_title_nzb_alongside_torrent()
+        {
+            // Regression: deduplication must not collapse an NZB and a torrent that share
+            // the same title. The NZB must survive and rank first due to Usenet-first sorting.
+            SetupIndexerFactory(
+                MakeNewznabDefinition("NZBgeek", "http://prowlarr:9696/9/", "test-api-key"),
+                MakeTorznabDefinition("Nyaa", "http://prowlarr:9696/1/", "test-api-key"));
+
+            var nzbJson = @"[
+                {
+                    ""title"": ""Some Manhwa Vol 1"",
+                    ""indexer"": ""NZBgeek"",
+                    ""downloadUrl"": ""http://prowlarr:9696/9/api?t=get&id=nzb1"",
+                    ""size"": 200000,
+                    ""seeders"": 0
+                }
+            ]";
+
+            var torrentJson = @"[
+                {
+                    ""title"": ""Some Manhwa Vol 1"",
+                    ""indexer"": ""Nyaa"",
+                    ""downloadUrl"": ""http://prowlarr:9696/1/api?t=get&id=tor1"",
+                    ""size"": 200000,
+                    ""seeders"": 500
+                }
+            ]";
+
+            Mocker.GetMock<IHttpClient>()
+                .Setup(x => x.GetAsync(It.Is<HttpRequest>(r => r.Url.FullUri.Contains("indexer=NZBgeek"))))
+                .ReturnsAsync(new HttpResponse(new HttpRequest(""), new HttpHeader(), nzbJson));
+
+            Mocker.GetMock<IHttpClient>()
+                .Setup(x => x.GetAsync(It.Is<HttpRequest>(r => r.Url.FullUri.Contains("indexer=Nyaa"))))
+                .ReturnsAsync(new HttpResponse(new HttpRequest(""), new HttpHeader(), torrentJson));
+
+            var results = await Subject.SearchMangaVolumePacksAsync("Some Manhwa", 1);
+
+            // Both protocols must survive deduplication
+            Assert.That(results, Has.Count.EqualTo(2));
+            // Usenet must rank first regardless of torrent seeder count
+            Assert.That(results[0].Protocol, Is.EqualTo(DownloadProtocol.Usenet));
+            Assert.That(results[1].Protocol, Is.EqualTo(DownloadProtocol.Torrent));
+        }
     }
 }
