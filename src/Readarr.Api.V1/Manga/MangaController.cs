@@ -11,6 +11,7 @@ using NzbDrone.Common.Extensions;
 using NzbDrone.Common.Http;
 using NzbDrone.Core.AuthorStats;
 using NzbDrone.Core.Books;
+using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.Manga;
 using NzbDrone.Core.Manga.Connectors;
@@ -304,19 +305,13 @@ namespace Readarr.Api.V1.Manga
         [HttpPost("{id}/search")]
         public async Task<ActionResult<MangaSearchAndDownloadResult>> SearchAllVolumes(int id)
         {
-            var author = _authorService.GetAuthor(id);
-            if (author == null)
-            {
-                return NotFound();
-            }
-
-            var series = ResolveMangaSeries(author);
+            var series = ResolveMangaSeriesForSearch(id);
             if (series == null)
             {
                 return Ok(new MangaSearchAndDownloadResult
                 {
                     Success = false,
-                    ErrorMessage = "No manga series is registered for this author. Try re-adding the manga."
+                    ErrorMessage = $"No manga series found for ID {id}. Try re-adding the manga."
                 });
             }
 
@@ -327,7 +322,7 @@ namespace Readarr.Api.V1.Manga
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "Manga search failed for series {0} (ID: {1})", author.Name, id);
+                _logger.Error(ex, "Manga search failed for series {0} (ID: {1})", series.Name, series.Id);
                 return Ok(new MangaSearchAndDownloadResult
                 {
                     Success = false,
@@ -336,57 +331,36 @@ namespace Readarr.Api.V1.Manga
             }
         }
 
-        [HttpPost("{id}/search/{bookId}")]
-        public async Task<ActionResult<MangaSearchAndDownloadResult>> SearchVolume(int id, int bookId)
+        [HttpPost("{id}/search/{volumeId}")]
+        public async Task<ActionResult<MangaSearchAndDownloadResult>> SearchVolume(int id, int volumeId)
         {
-            var author = _authorService.GetAuthor(id);
-            if (author == null)
-            {
-                return NotFound();
-            }
-
-            var series = ResolveMangaSeries(author);
+            var series = ResolveMangaSeriesForSearch(id);
             if (series == null)
             {
                 return Ok(new MangaSearchAndDownloadResult
                 {
                     Success = false,
-                    ErrorMessage = "No manga series is registered for this author. Try re-adding the manga."
+                    ErrorMessage = $"No manga series found for ID {id}. Try re-adding the manga."
                 });
             }
 
-            int? volumeNumber = null;
-
-            // Primary path: resolve as a native Volume ID (canonical for the manga flow)
-            var volume = _volumeRepository.Find(bookId);
-            if (volume != null && volume.MangaSeriesId == series.Id)
+            // Canonical Volume resolution: volumeId is always the native Volume row ID,
+            // never a legacy Book ID. Book-based fallback is intentionally not supported
+            // here so that a native series ID is never mixed with a legacy Book lookup.
+            var volume = _volumeRepository.Find(volumeId);
+            if (volume == null || volume.MangaSeriesId != series.Id)
             {
-                volumeNumber = volume.VolumeNumber;
-            }
-
-            // Legacy fallback: resolve as a Book ID and extract volume number from its title
-            if (!volumeNumber.HasValue)
-            {
-                var book = _bookService.GetBook(bookId);
-                if (book != null && book.AuthorId == id)
-                {
-                    volumeNumber = ExtractVolumeNumber(book.Title) ?? ExtractVolumeNumber(book.ForeignBookId);
-                }
-            }
-
-            if (!volumeNumber.HasValue)
-            {
-                return NotFound($"Volume or book {bookId} not found for manga {id}");
+                return NotFound($"Volume {volumeId} not found for manga series {series.Id}");
             }
 
             try
             {
-                var result = await _mangaSearchService.SearchAndDownloadAsync(series.Id, volumeNumber.Value);
+                var result = await _mangaSearchService.SearchAndDownloadAsync(series, volume);
                 return Ok(result);
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "Manga search failed for series {0} volume {1} (ID: {2})", author.Name, volumeNumber.Value, id);
+                _logger.Error(ex, "Manga search failed for series {0} volume {1} (ID: {2})", series.Name, volume.VolumeNumber, volume.Id);
                 return Ok(new MangaSearchAndDownloadResult
                 {
                     Success = false,
@@ -552,6 +526,28 @@ namespace Readarr.Api.V1.Manga
             catch (Exception ex)
             {
                 _logger.Error(ex, "Failed to migrate legacy BookFiles to MangaFiles for manga {0}", author.Name);
+            }
+        }
+
+        // Resolves the manga series for the search endpoints. Native MangaSeries IDs are
+        // canonical and are tried first so this never touches AuthorService for them. Legacy
+        // Author IDs (from before native manga IDs existed) are supported as a fallback only.
+        private MangaSeries ResolveMangaSeriesForSearch(int id)
+        {
+            var series = _mangaSeriesRepository.Find(id);
+            if (series != null)
+            {
+                return series;
+            }
+
+            try
+            {
+                var author = _authorService.GetAuthor(id);
+                return ResolveMangaSeries(author);
+            }
+            catch (ModelNotFoundException)
+            {
+                return null;
             }
         }
 
