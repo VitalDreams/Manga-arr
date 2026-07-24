@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -51,19 +52,62 @@ namespace NzbDrone.Core.Manga
 
             try
             {
-                _logger.Info("Triggering Komga library scan...");
-                var url = $"{BaseUrl}/api/v1/libraries/scan";
-                var request = new HttpRequestBuilder(url)
-                    .SetHeader("X-API-Key", ApiKey)
-                    .Build();
+                // Komga has no "scan all libraries" endpoint - a scan must be requested
+                // per library via POST /api/v1/libraries/{libraryId}/scan.
+                var libraryIds = await GetLibraryIdsAsync();
 
-                await _httpClient.PostAsync(request);
+                if (!libraryIds.Any())
+                {
+                    _logger.Warn("No Komga libraries found to scan");
+                    return;
+                }
+
+                _logger.Info("Triggering Komga library scan for {0} librar(y/ies)...", libraryIds.Count);
+
+                foreach (var libraryId in libraryIds)
+                {
+                    var url = $"{BaseUrl}/api/v1/libraries/{libraryId}/scan";
+                    var request = new HttpRequestBuilder(url)
+                        .SetHeader("X-API-Key", ApiKey)
+                        .Build();
+
+                    await _httpClient.PostAsync(request);
+                }
+
                 _logger.Info("Komga library scan triggered");
             }
             catch (Exception ex)
             {
                 _logger.Error(ex, "Failed to trigger Komga library scan");
             }
+        }
+
+        private async Task<List<string>> GetLibraryIdsAsync()
+        {
+            var url = $"{BaseUrl}/api/v1/libraries";
+            var request = new HttpRequestBuilder(url)
+                .SetHeader("X-API-Key", ApiKey)
+                .Build();
+
+            var response = await _httpClient.GetAsync(request);
+
+            if (response.StatusCode != System.Net.HttpStatusCode.OK || string.IsNullOrEmpty(response.Content))
+            {
+                return new List<string>();
+            }
+
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var libraries = JsonSerializer.Deserialize<List<KomgaLibraryDto>>(response.Content, options);
+
+            return libraries?
+                .Select(l => l.Id)
+                .Where(id => !string.IsNullOrEmpty(id))
+                .ToList() ?? new List<string>();
+        }
+
+        private class KomgaLibraryDto
+        {
+            public string Id { get; set; }
         }
 
         public async Task TriggerSeriesScanAsync(string seriesId)
