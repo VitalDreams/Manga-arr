@@ -345,18 +345,6 @@ namespace Readarr.Api.V1.Manga
                 return NotFound();
             }
 
-            var book = _bookService.GetBook(bookId);
-            if (book == null || book.AuthorId != id)
-            {
-                return NotFound($"Book {bookId} not found for manga {id}");
-            }
-
-            var volumeNumber = ExtractVolumeNumber(book.Title) ?? ExtractVolumeNumber(book.ForeignBookId);
-            if (!volumeNumber.HasValue)
-            {
-                return BadRequest($"Could not determine volume number from book '{book.Title}'");
-            }
-
             var series = ResolveMangaSeries(author);
             if (series == null)
             {
@@ -365,6 +353,30 @@ namespace Readarr.Api.V1.Manga
                     Success = false,
                     ErrorMessage = "No manga series is registered for this author. Try re-adding the manga."
                 });
+            }
+
+            int? volumeNumber = null;
+
+            // Primary path: resolve as a native Volume ID (canonical for the manga flow)
+            var volume = _volumeRepository.Find(bookId);
+            if (volume != null && volume.MangaSeriesId == series.Id)
+            {
+                volumeNumber = volume.VolumeNumber;
+            }
+
+            // Legacy fallback: resolve as a Book ID and extract volume number from its title
+            if (!volumeNumber.HasValue)
+            {
+                var book = _bookService.GetBook(bookId);
+                if (book != null && book.AuthorId == id)
+                {
+                    volumeNumber = ExtractVolumeNumber(book.Title) ?? ExtractVolumeNumber(book.ForeignBookId);
+                }
+            }
+
+            if (!volumeNumber.HasValue)
+            {
+                return NotFound($"Volume or book {bookId} not found for manga {id}");
             }
 
             try
