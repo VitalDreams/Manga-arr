@@ -35,6 +35,7 @@ namespace NzbDrone.Core.Manga.Connectors
         private string _serverUrl;
         private string _apiKey;
         private Dictionary<string, DownloadProtocol> _indexerProtocols;
+        private Dictionary<string, string> _indexerIds;
         private bool _initialized;
 
         public bool IsConfigured
@@ -66,6 +67,7 @@ namespace NzbDrone.Core.Manga.Connectors
             {
                 var definitions = _indexerFactory.All();
                 var protocols = new Dictionary<string, DownloadProtocol>(StringComparer.OrdinalIgnoreCase);
+                var indexerIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 string serverUrl = null;
                 string apiKey = null;
 
@@ -105,6 +107,7 @@ namespace NzbDrone.Core.Manga.Connectors
                     if (!protocols.ContainsKey(definition.Name))
                     {
                         protocols[definition.Name] = protocol;
+                        indexerIds[definition.Name] = ExtractProwlarrIndexerId(settings.BaseUrl, definition.Id);
                     }
                 }
 
@@ -113,6 +116,7 @@ namespace NzbDrone.Core.Manga.Connectors
                     _serverUrl = serverUrl;
                     _apiKey = apiKey;
                     _indexerProtocols = protocols;
+                    _indexerIds = indexerIds;
                     _logger.Info("Prowlarr connector configured from {0} indexer definition(s), server: {1}", protocols.Count, _serverUrl);
                 }
                 else
@@ -124,6 +128,39 @@ namespace NzbDrone.Core.Manga.Connectors
             {
                 _logger.Error(ex, "Failed to initialize Prowlarr connector from indexer definitions");
             }
+        }
+
+        /// <summary>
+        /// Resolve the Prowlarr global indexer id to route requests to. The persisted
+        /// BaseUrl (e.g. "http://prowlarr:9696/9/api") encodes Prowlarr's actual numeric
+        /// indexer path, which is authoritative - it can diverge from the local
+        /// IndexerDefinition.Id (e.g. torrent /1/ vs Usenet /9/), and routing on the local
+        /// id instead would silently query the wrong Prowlarr indexer. Only fall back to
+        /// the local id when the BaseUrl has no numeric path segment to extract.
+        /// </summary>
+        private string ExtractProwlarrIndexerId(string baseUrl, int fallbackId)
+        {
+            if (!string.IsNullOrWhiteSpace(baseUrl))
+            {
+                try
+                {
+                    var uri = new Uri(baseUrl.EndsWith("/") ? baseUrl : baseUrl + "/");
+                    var numericSegment = uri.AbsolutePath
+                        .Split('/', StringSplitOptions.RemoveEmptyEntries)
+                        .FirstOrDefault(segment => int.TryParse(segment, out _));
+
+                    if (numericSegment != null)
+                    {
+                        return numericSegment;
+                    }
+                }
+                catch (UriFormatException)
+                {
+                    _logger.Debug("Could not parse BaseUrl {0} for Prowlarr indexer id extraction", baseUrl);
+                }
+            }
+
+            return fallbackId.ToString();
         }
 
         /// <summary>
@@ -148,7 +185,8 @@ namespace NzbDrone.Core.Manga.Connectors
                 {
                     try
                     {
-                        var url = $"{_serverUrl}/api/v1/search?query={Uri.EscapeDataString(query)}&categories=7030&categories=7000&indexer={Uri.EscapeDataString(route.Key)}&limit=25";
+                        var indexerId = _indexerIds.TryGetValue(route.Key, out var configuredId) ? configuredId : route.Key;
+                        var url = $"{_serverUrl}/api/v1/search?query={Uri.EscapeDataString(query)}&categories=7030&categories=7000&indexer={Uri.EscapeDataString(indexerId)}&limit=25";
 
                         var request = new HttpRequestBuilder(url)
                             .SetHeader("X-Api-Key", _apiKey)

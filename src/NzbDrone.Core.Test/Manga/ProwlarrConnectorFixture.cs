@@ -28,6 +28,7 @@ namespace NzbDrone.Core.Test.Manga
         {
             return new IndexerDefinition
             {
+                Id = 9,
                 Name = name,
                 Implementation = "Newznab",
                 Settings = new NewznabSettings
@@ -44,6 +45,7 @@ namespace NzbDrone.Core.Test.Manga
         {
             return new IndexerDefinition
             {
+                Id = 1,
                 Name = name,
                 Implementation = "Torznab",
                 Settings = new TorznabSettings
@@ -253,6 +255,87 @@ namespace NzbDrone.Core.Test.Manga
         }
 
         [Test]
+        public async Task search_should_route_by_baseurl_numeric_path_when_local_id_is_mismatched()
+        {
+            // The local IndexerDefinition.Id is deliberately the opposite of the Prowlarr
+            // numeric path encoded in BaseUrl (Newznab.Id=1 but BaseUrl has /9/, Torznab.Id=9
+            // but BaseUrl has /1/). Routing must follow the BaseUrl path, not the local id,
+            // otherwise the Usenet search would be sent to Prowlarr's torrent indexer.
+            SetupIndexerFactory(
+                new IndexerDefinition
+                {
+                    Id = 1,
+                    Name = "NZBgeek",
+                    Implementation = "Newznab",
+                    Settings = new NewznabSettings
+                    {
+                        BaseUrl = "http://prowlarr:9696/9/",
+                        ApiKey = "test-api-key",
+                        ApiPath = "/api",
+                        Categories = new[] { 7030 }
+                    }
+                },
+                new IndexerDefinition
+                {
+                    Id = 9,
+                    Name = "Nyaa",
+                    Implementation = "Torznab",
+                    Settings = new TorznabSettings
+                    {
+                        BaseUrl = "http://prowlarr:9696/1/",
+                        ApiKey = "test-api-key",
+                        ApiPath = "/api",
+                        Categories = new[] { 7030 }
+                    }
+                });
+
+            Mocker.GetMock<IHttpClient>()
+                .Setup(x => x.GetAsync(It.Is<HttpRequest>(r => r.Url.FullUri.Contains("indexer=9"))))
+                .ReturnsAsync(new HttpResponse(new HttpRequest(""), new HttpHeader(), "[]"));
+
+            Mocker.GetMock<IHttpClient>()
+                .Setup(x => x.GetAsync(It.Is<HttpRequest>(r => r.Url.FullUri.Contains("indexer=1"))))
+                .ReturnsAsync(new HttpResponse(new HttpRequest(""), new HttpHeader(), "[]"));
+
+            await Subject.SearchAsync("Some Manhwa");
+
+            Mocker.GetMock<IHttpClient>()
+                .Verify(x => x.GetAsync(It.Is<HttpRequest>(r => r.Url.FullUri.Contains("indexer=9"))), Times.Once);
+            Mocker.GetMock<IHttpClient>()
+                .Verify(x => x.GetAsync(It.Is<HttpRequest>(r => r.Url.FullUri.Contains("indexer=1"))), Times.Once);
+        }
+
+        [Test]
+        public async Task search_should_fall_back_to_local_id_when_baseurl_has_no_numeric_path()
+        {
+            // BaseUrl has no numeric Prowlarr indexer path segment (e.g. proxied through a
+            // path-less URL), so routing must safely fall back to the local definition id.
+            SetupIndexerFactory(
+                new IndexerDefinition
+                {
+                    Id = 42,
+                    Name = "NZBgeek",
+                    Implementation = "Newznab",
+                    Settings = new NewznabSettings
+                    {
+                        BaseUrl = "http://prowlarr:9696/api",
+                        ApiKey = "test-api-key",
+                        ApiPath = "/api",
+                        Categories = new[] { 7030 }
+                    }
+                });
+
+            Mocker.GetMock<IHttpClient>()
+                .Setup(x => x.GetAsync(It.IsAny<HttpRequest>()))
+                .ReturnsAsync(new HttpResponse(new HttpRequest(""), new HttpHeader(), "[]"));
+
+            await Subject.SearchAsync("Some Manhwa");
+
+            Mocker.GetMock<IHttpClient>()
+                .Verify(x => x.GetAsync(It.Is<HttpRequest>(r => r.Url.FullUri.Contains("indexer=42"))), Times.Once);
+        }
+
+        [Test]
         public async Task search_manga_volume_packs_should_prefer_usenet_over_torrent_regardless_of_seeders()
         {
             SetupIndexerFactory(
@@ -280,11 +363,11 @@ namespace NzbDrone.Core.Test.Manga
             ]";
 
             Mocker.GetMock<IHttpClient>()
-                .Setup(x => x.GetAsync(It.Is<HttpRequest>(r => r.Url.FullUri.Contains("indexer=NZBgeek"))))
+                .Setup(x => x.GetAsync(It.Is<HttpRequest>(r => r.Url.FullUri.Contains("indexer=9"))))
                 .ReturnsAsync(new HttpResponse(new HttpRequest(""), new HttpHeader(), newznabJson));
 
             Mocker.GetMock<IHttpClient>()
-                .Setup(x => x.GetAsync(It.Is<HttpRequest>(r => r.Url.FullUri.Contains("indexer=Nyaa"))))
+                .Setup(x => x.GetAsync(It.Is<HttpRequest>(r => r.Url.FullUri.Contains("indexer=1"))))
                 .ReturnsAsync(new HttpResponse(new HttpRequest(""), new HttpHeader(), torznabJson));
 
             var results = await Subject.SearchMangaVolumePacksAsync("Some Manhwa", 1);
@@ -382,11 +465,11 @@ namespace NzbDrone.Core.Test.Manga
             ]";
 
             Mocker.GetMock<IHttpClient>()
-                .Setup(x => x.GetAsync(It.Is<HttpRequest>(r => r.Url.FullUri.Contains("indexer=NZBgeek"))))
+                .Setup(x => x.GetAsync(It.Is<HttpRequest>(r => r.Url.FullUri.Contains("indexer=9"))))
                 .ReturnsAsync(new HttpResponse(new HttpRequest(""), new HttpHeader(), nzbJson));
 
             Mocker.GetMock<IHttpClient>()
-                .Setup(x => x.GetAsync(It.Is<HttpRequest>(r => r.Url.FullUri.Contains("indexer=Nyaa"))))
+                .Setup(x => x.GetAsync(It.Is<HttpRequest>(r => r.Url.FullUri.Contains("indexer=1"))))
                 .ReturnsAsync(new HttpResponse(new HttpRequest(""), new HttpHeader(), torrentJson));
 
             var results = await Subject.SearchMangaVolumePacksAsync("Some Manhwa", 1);

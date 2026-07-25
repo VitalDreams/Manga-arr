@@ -51,7 +51,7 @@ newznab = {
     "implementation": "Newznab",
     "configContract": "NewznabSettings",
     "fields": [
-        {"name": "baseUrl", "value": "http://prowlarr:9696/1/"},
+        {"name": "baseUrl", "value": "http://prowlarr:9696/9/"},
         {"name": "apiPath", "value": "/api"},
         {"name": "apiKey", "value": PROWLARR_KEY},
         {"name": "categories", "value": [7030, 7000]}
