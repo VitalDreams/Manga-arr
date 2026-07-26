@@ -185,7 +185,7 @@ namespace NzbDrone.Core.Test.Manga
                 });
 
             Mocker.GetMock<IProwlarrConnector>()
-                .Setup(x => x.GetDownloadProtocol(It.IsAny<ProwlarrSearchResult>()))
+                .Setup(x => x.GetDownloadProtocol(It.IsAny<ProwlarrSearchResult>(), It.IsAny<DownloadProtocol?>()))
                 .Returns(DownloadProtocol.Torrent);
 
             Mocker.GetMock<IMangaDownloadService>()
@@ -345,7 +345,7 @@ namespace NzbDrone.Core.Test.Manga
                 });
 
             Mocker.GetMock<IProwlarrConnector>()
-                .Setup(x => x.GetDownloadProtocol(It.IsAny<ProwlarrSearchResult>()))
+                .Setup(x => x.GetDownloadProtocol(It.IsAny<ProwlarrSearchResult>(), It.IsAny<DownloadProtocol?>()))
                 .Returns(DownloadProtocol.Torrent);
 
             Mocker.GetMock<IMangaDownloadService>()
@@ -522,7 +522,7 @@ namespace NzbDrone.Core.Test.Manga
                 });
 
             Mocker.GetMock<IProwlarrConnector>()
-                .Setup(x => x.GetDownloadProtocol(It.IsAny<ProwlarrSearchResult>()))
+                .Setup(x => x.GetDownloadProtocol(It.IsAny<ProwlarrSearchResult>(), It.IsAny<DownloadProtocol?>()))
                 .Returns(DownloadProtocol.Usenet);
 
             Mocker.GetMock<IMangaDownloadService>()
@@ -614,7 +614,7 @@ namespace NzbDrone.Core.Test.Manga
                 });
 
             Mocker.GetMock<IProwlarrConnector>()
-                .Setup(x => x.GetDownloadProtocol(It.IsAny<ProwlarrSearchResult>()))
+                .Setup(x => x.GetDownloadProtocol(It.IsAny<ProwlarrSearchResult>(), It.IsAny<DownloadProtocol?>()))
                 .Returns(DownloadProtocol.Usenet);
 
             Mocker.GetMock<IMangaDownloadService>()
@@ -701,10 +701,10 @@ namespace NzbDrone.Core.Test.Manga
                 });
 
             Mocker.GetMock<IProwlarrConnector>()
-                .Setup(x => x.GetDownloadProtocol(It.Is<ProwlarrSearchResult>(r => r.Protocol == DownloadProtocol.Usenet)))
+                .Setup(x => x.GetDownloadProtocol(It.Is<ProwlarrSearchResult>(r => r.Protocol == DownloadProtocol.Usenet), It.IsAny<DownloadProtocol?>()))
                 .Returns(DownloadProtocol.Usenet);
             Mocker.GetMock<IProwlarrConnector>()
-                .Setup(x => x.GetDownloadProtocol(It.Is<ProwlarrSearchResult>(r => r.Protocol == DownloadProtocol.Torrent)))
+                .Setup(x => x.GetDownloadProtocol(It.Is<ProwlarrSearchResult>(r => r.Protocol == DownloadProtocol.Torrent), It.IsAny<DownloadProtocol?>()))
                 .Returns(DownloadProtocol.Torrent);
 
             Mocker.GetMock<IMangaDownloadService>()
@@ -786,7 +786,7 @@ namespace NzbDrone.Core.Test.Manga
                 });
 
             Mocker.GetMock<IProwlarrConnector>()
-                .Setup(x => x.GetDownloadProtocol(It.IsAny<ProwlarrSearchResult>()))
+                .Setup(x => x.GetDownloadProtocol(It.IsAny<ProwlarrSearchResult>(), It.IsAny<DownloadProtocol?>()))
                 .Returns(DownloadProtocol.Torrent);
 
             Mocker.GetMock<IMangaDownloadService>()
@@ -880,7 +880,7 @@ namespace NzbDrone.Core.Test.Manga
                 });
 
             Mocker.GetMock<IProwlarrConnector>()
-                .Setup(x => x.GetDownloadProtocol(It.IsAny<ProwlarrSearchResult>()))
+                .Setup(x => x.GetDownloadProtocol(It.IsAny<ProwlarrSearchResult>(), It.IsAny<DownloadProtocol?>()))
                 .Returns(DownloadProtocol.Usenet);
 
             Mocker.GetMock<IMangaDownloadService>()
@@ -1047,7 +1047,7 @@ namespace NzbDrone.Core.Test.Manga
                 });
 
             Mocker.GetMock<IProwlarrConnector>()
-                .Setup(x => x.GetDownloadProtocol(It.IsAny<ProwlarrSearchResult>()))
+                .Setup(x => x.GetDownloadProtocol(It.IsAny<ProwlarrSearchResult>(), It.IsAny<DownloadProtocol?>()))
                 .Returns(DownloadProtocol.Usenet);
 
             Mocker.GetMock<IMangaDownloadService>()
@@ -1089,6 +1089,89 @@ namespace NzbDrone.Core.Test.Manga
                     It.IsAny<MangaSeries>(),
                     It.IsAny<Volume>()),
                     Times.Never());
+        }
+
+        [Test]
+        public async Task prowlarr_fallback_should_use_the_results_own_protocol_not_a_blind_reclassification()
+        {
+            // Reproduces the live bug at the download-dispatch boundary: the selected result
+            // already carries the correct protocol (resolved by ProwlarrConnector with full
+            // route context during search), but IProwlarrConnector.GetDownloadProtocol(result)
+            // called again *without* that context (e.g. because the indexer name on the result
+            // doesn't match a local indexer definition, which happens whenever one local
+            // indexer definition fans out to many real indexers in Prowlarr) can disagree and
+            // fall back to Torrent. The mock here deliberately returns the wrong answer for a
+            // blind re-derivation to prove MangaSearchService trusts bestResult.Protocol instead
+            // of calling GetDownloadProtocol again.
+            Mocker.GetMock<IMangaSeriesService>()
+                .Setup(x => x.GetSeries(18))
+                .Returns(_series);
+
+            Mocker.GetMock<IVolumeRepository>()
+                .Setup(x => x.FindBySeriesAndVolumeNumber(18, 1))
+                .Returns(_volume1);
+
+            Mocker.GetMock<IMangaMetadataConnector>()
+                .Setup(x => x.GetVolumeChapterMapAsync(_series.ForeignMangaId))
+                .ReturnsAsync(new VolumeChapterMap
+                {
+                    ForeignMangaId = _series.ForeignMangaId,
+                    VolumeChapters = new Dictionary<int, List<string>>()
+                });
+
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.IsConfigured)
+                .Returns(true);
+
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.SearchMangaVolumePacksAsync("Berserk", 1))
+                .ReturnsAsync(new List<ProwlarrSearchResult>
+                {
+                    new ProwlarrSearchResult
+                    {
+                        Title = "Berserk Vol 1 [nzb]",
+                        DownloadUrl = "http://example.com/nzb",
+                        Seeders = 0,
+                        Size = 200_000_000,
+                        Protocol = DownloadProtocol.Usenet,
+                        Indexer = "NZBgeek"
+                    }
+                });
+
+            // A blind re-derivation (no route context) would wrongly say Torrent - this must
+            // never be trusted over the result's own already-resolved Protocol.
+            Mocker.GetMock<IProwlarrConnector>()
+                .Setup(x => x.GetDownloadProtocol(It.IsAny<ProwlarrSearchResult>(), It.IsAny<DownloadProtocol?>()))
+                .Returns(DownloadProtocol.Torrent);
+
+            Mocker.GetMock<IMangaDownloadService>()
+                .Setup(x => x.SendToDownloadClient(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<DownloadProtocol>(),
+                    It.IsAny<MangaSeries>(),
+                    It.IsAny<Volume>()))
+                .ReturnsAsync(new MangaDownloadResult
+                {
+                    Success = true,
+                    DownloadId = "nzb-001",
+                    Title = "Berserk Vol 1 [nzb]",
+                    Protocol = DownloadProtocol.Usenet,
+                    ClientName = "SABnzbd"
+                });
+
+            var result = await Subject.SearchAndDownloadAsync(18, 1);
+
+            Assert.That(result.Success, Is.True);
+
+            Mocker.GetMock<IMangaDownloadService>()
+                .Verify(x => x.SendToDownloadClient(
+                    It.IsAny<string>(),
+                    "http://example.com/nzb",
+                    DownloadProtocol.Usenet,
+                    _series,
+                    It.IsAny<Volume>()),
+                    Times.Once());
         }
 
         [Test]
@@ -1143,7 +1226,7 @@ namespace NzbDrone.Core.Test.Manga
                 });
 
             Mocker.GetMock<IProwlarrConnector>()
-                .Setup(x => x.GetDownloadProtocol(It.IsAny<ProwlarrSearchResult>()))
+                .Setup(x => x.GetDownloadProtocol(It.IsAny<ProwlarrSearchResult>(), It.IsAny<DownloadProtocol?>()))
                 .Returns(DownloadProtocol.Torrent);
 
             Mocker.GetMock<IMangaDownloadService>()

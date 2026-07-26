@@ -21,7 +21,7 @@ namespace NzbDrone.Core.Manga.Connectors
         Task<List<ProwlarrIndexer>> GetIndexersAsync();
         Task<List<ProwlarrSearchResult>> SearchMangaVolumePacksAsync(string mangaTitle, int volumeNumber);
         Task<List<ProwlarrSearchResult>> SearchMangaAsync(string mangaTitle, int? volumeNumber = null);
-        DownloadProtocol GetDownloadProtocol(ProwlarrSearchResult result);
+        DownloadProtocol GetDownloadProtocol(ProwlarrSearchResult result, DownloadProtocol? queriedIndexerProtocol = null);
         List<ProwlarrSearchResult> FilterByTitleAndVolume(List<ProwlarrSearchResult> results, string mangaTitle, int volumeNumber);
         bool IsConfigured { get; }
     }
@@ -197,15 +197,21 @@ namespace NzbDrone.Core.Manga.Connectors
 
                         foreach (var r in results)
                         {
-                            // Tag with the indexer we queried (API responses don't always echo it back),
-                            // then re-derive protocol so an unambiguous torrent/magnet payload can never
-                            // be reported as Usenet just because the route we queried is labeled Newznab.
+                            // Tag with the indexer we queried (API responses don't always echo it back).
                             if (string.IsNullOrEmpty(r.Indexer))
                             {
                                 r.Indexer = route.Key;
                             }
 
-                            r.Protocol = GetDownloadProtocol(r);
+                            // Pass along the protocol of the route we deliberately queried (route.Value).
+                            // This is required, not just a nicety: Prowlarr's "indexer" field on each
+                            // result names the real underlying indexer it aggregated (e.g. "Nyaa.si"),
+                            // which will not match our local proxy definition's name (e.g. "Prowlarr
+                            // (Usenet)") when one local indexer definition fans out to many indexers on
+                            // the Prowlarr side - the standard setup. Without this, the indexer-name map
+                            // below always misses and every result (Usenet included) silently defaults to
+                            // Torrent, which is why a genuine NZB result would lose to a torrent on seeders.
+                            r.Protocol = GetDownloadProtocol(r, route.Value);
                         }
 
                         allResults.AddRange(results);
@@ -388,10 +394,14 @@ namespace NzbDrone.Core.Manga.Connectors
         /// labeled Newznab/Usenet (or Torznab/Torrent) in its definition while still
         /// handing back the opposite payload, and trusting the label in that case would
         /// send the wrong kind of link to the download client.
-        /// Only once the payload gives no signal do we fall back to the indexer→protocol
-        /// map, then category heuristics.
+        /// Once the payload gives no signal, the protocol of the specific indexer route this
+        /// result was fetched from (<paramref name="queriedIndexerProtocol"/>) is authoritative
+        /// when known - it reflects our own indexer definitions, not Prowlarr's naming of the
+        /// underlying indexer it aggregated. Only when that isn't available (e.g. results
+        /// fetched outside a per-route search, such as GetByIdAsync) do we fall back to the
+        /// indexer-name map, then category heuristics.
         /// </summary>
-        public DownloadProtocol GetDownloadProtocol(ProwlarrSearchResult result)
+        public DownloadProtocol GetDownloadProtocol(ProwlarrSearchResult result, DownloadProtocol? queriedIndexerProtocol = null)
         {
             // Payload signals first (most trustworthy - can't be misconfigured)
             if (!string.IsNullOrEmpty(result.MagnetUrl))
@@ -412,6 +422,11 @@ namespace NzbDrone.Core.Manga.Connectors
                 {
                     return DownloadProtocol.Usenet;
                 }
+            }
+
+            if (queriedIndexerProtocol.HasValue)
+            {
+                return queriedIndexerProtocol.Value;
             }
 
             // Check indexer→protocol map (reliable for correctly-configured Newznab/Torznab indexers)
@@ -456,11 +471,13 @@ namespace NzbDrone.Core.Manga.Connectors
             }
 
             var cleanTitle = CleanTitle(mangaTitle);
+
+            // Tolerate zero-padded volume numbers commonly used by publisher releases.
             var volPatterns = new[]
             {
-                $@"\bvol(?:ume)?\.?\s*{volumeNumber}\b",
-                $@"\bv\.?{volumeNumber}\b",
-                $@"\b{volumeNumber}(?:st|nd|rd|th)?\s*(?:vol|volume)\b"
+                $@"\bvol(?:ume)?\.?\s*0*{volumeNumber}\b",
+                $@"\bv\.?0*{volumeNumber}\b",
+                $@"\b0*{volumeNumber}(?:st|nd|rd|th)?\s*(?:vol|volume)\b"
             };
 
             return results.Where(r =>
@@ -525,14 +542,15 @@ namespace NzbDrone.Core.Manga.Connectors
                 return true;
             }
 
-            // Check if most significant words match
+            // Score against the manga title's words so publisher/release-group prefixes and
+            // suffixes do not dilute an otherwise valid title match.
             var words1 = title1.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             var words2 = title2.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
-            var matchCount = words1.Count(w => words2.Contains(w));
-            var totalWords = Math.Max(words1.Length, words2.Length);
+            var matchCount = words2.Count(w => words1.Contains(w));
+            var totalWords = words2.Length;
 
-            // Require at least 70% word overlap
+            // Require at least 70% of the manga title's words to be present.
             return totalWords > 0 && (double)matchCount / totalWords >= 0.7;
         }
 

@@ -436,6 +436,127 @@ namespace NzbDrone.Core.Test.Manga
         }
 
         [Test]
+        public void get_download_protocol_should_trust_queried_route_protocol_over_a_mismatched_indexer_name()
+        {
+            // Reproduces the real-world Prowlarr setup (scripts/add-prowlarr-final.py): a single
+            // local indexer definition per protocol ("Prowlarr (Usenet)") proxies many real
+            // indexers on the Prowlarr side. Prowlarr's search response echoes back the real
+            // underlying indexer's name ("NZBgeek"), which never matches the local definition
+            // name, so the indexer-name map must not be relied on here - the caller-supplied
+            // route protocol (known from the endpoint we deliberately queried) must win.
+            SetupIndexerFactory(
+                MakeNewznabDefinition("Prowlarr (Usenet)", "http://prowlarr:9696/9/", "test-api-key"));
+
+            var result = new ProwlarrSearchResult
+            {
+                Title = "Some Manhwa Vol 1",
+                Indexer = "NZBgeek",
+                DownloadUrl = "http://prowlarr:9696/9/api?t=get&id=abc123"
+            };
+
+            Assert.That(
+                Subject.GetDownloadProtocol(result, DownloadProtocol.Usenet),
+                Is.EqualTo(DownloadProtocol.Usenet));
+        }
+
+        [Test]
+        public void get_download_protocol_should_still_trust_a_magnet_payload_over_the_queried_route_protocol()
+        {
+            // Even with an authoritative route protocol, an unambiguous magnet payload must win -
+            // a misconfigured/proxying indexer can hand back the opposite kind of link.
+            SetupIndexerFactory(
+                MakeNewznabDefinition("Prowlarr (Usenet)", "http://prowlarr:9696/9/", "test-api-key"));
+
+            var result = new ProwlarrSearchResult
+            {
+                Title = "Some Manhwa Vol 1",
+                Indexer = "NZBgeek",
+                MagnetUrl = "magnet:?xt=urn:btih:abc123"
+            };
+
+            Assert.That(
+                Subject.GetDownloadProtocol(result, DownloadProtocol.Usenet),
+                Is.EqualTo(DownloadProtocol.Torrent));
+        }
+
+        [Test]
+        public async Task search_manga_volume_packs_should_prefer_usenet_when_indexer_names_do_not_match_local_definitions()
+        {
+            // End-to-end reproduction of the live bug: aggregator-style local indexer
+            // definitions ("Prowlarr (Usenet)" / "Prowlarr (Torrents)") whose names never
+            // appear in Prowlarr's per-result "indexer" field (which names the real
+            // underlying indexer instead, e.g. "NZBgeek" / "Nyaa.si"). Before routing the
+            // known per-route protocol through, every result silently defaulted to Torrent,
+            // so the zero-seeder Usenet result always lost to the seeded Nyaa torrent.
+            SetupIndexerFactory(
+                MakeNewznabDefinition("Prowlarr (Usenet)", "http://prowlarr:9696/9/", "test-api-key"),
+                MakeTorznabDefinition("Prowlarr (Torrents)", "http://prowlarr:9696/1/", "test-api-key"));
+
+            var newznabJson = @"[
+                {
+                    ""title"": ""Some Manhwa Vol 1"",
+                    ""indexer"": ""NZBgeek"",
+                    ""downloadUrl"": ""http://prowlarr:9696/9/api?t=get&id=nzb1"",
+                    ""size"": 200000,
+                    ""seeders"": 0
+                }
+            ]";
+
+            var torznabJson = @"[
+                {
+                    ""title"": ""Some Manhwa Vol 1"",
+                    ""indexer"": ""Nyaa.si"",
+                    ""downloadUrl"": ""http://prowlarr:9696/1/api?t=get&id=tor1"",
+                    ""size"": 200000,
+                    ""seeders"": 500
+                }
+            ]";
+
+            Mocker.GetMock<IHttpClient>()
+                .Setup(x => x.GetAsync(It.Is<HttpRequest>(r => r.Url.FullUri.Contains("indexer=9"))))
+                .ReturnsAsync(new HttpResponse(new HttpRequest(""), new HttpHeader(), newznabJson));
+
+            Mocker.GetMock<IHttpClient>()
+                .Setup(x => x.GetAsync(It.Is<HttpRequest>(r => r.Url.FullUri.Contains("indexer=1"))))
+                .ReturnsAsync(new HttpResponse(new HttpRequest(""), new HttpHeader(), torznabJson));
+
+            var results = await Subject.SearchMangaVolumePacksAsync("Some Manhwa", 1);
+
+            Assert.That(results, Has.Count.EqualTo(2));
+            Assert.That(results[0].Protocol, Is.EqualTo(DownloadProtocol.Usenet));
+            Assert.That(results[1].Protocol, Is.EqualTo(DownloadProtocol.Torrent));
+        }
+
+        [Test]
+        public async Task search_manga_volume_packs_should_accept_publisher_prefixed_usenet_release()
+        {
+            // Reproduces the live bug: a legitimate Usenet release titled with a publisher
+            // prefix/suffix ("Yen.Press-Solo.Leveling.Vol.01.2021.Retail.Comic") was being
+            // rejected by FilterByTitleAndVolume.
+            SetupIndexerFactory(
+                MakeNewznabDefinition("NZBgeek", "http://prowlarr:9696/9/", "test-api-key"));
+
+            var json = @"[
+                {
+                    ""title"": ""Yen.Press-Solo.Leveling.Vol.01.2021.Retail.Comic"",
+                    ""indexer"": ""NZBgeek"",
+                    ""downloadUrl"": ""http://prowlarr:9696/9/api?t=get&id=nzb1"",
+                    ""size"": 200000000,
+                    ""seeders"": 0
+                }
+            ]";
+
+            Mocker.GetMock<IHttpClient>()
+                .Setup(x => x.GetAsync(It.IsAny<HttpRequest>()))
+                .ReturnsAsync(new HttpResponse(new HttpRequest(""), new HttpHeader(), json));
+
+            var results = await Subject.SearchMangaVolumePacksAsync("Solo Leveling", 1);
+
+            Assert.That(results, Has.Count.EqualTo(1));
+            Assert.That(results[0].Protocol, Is.EqualTo(DownloadProtocol.Usenet));
+        }
+
+        [Test]
         public async Task search_manga_volume_packs_should_preserve_same_title_nzb_alongside_torrent()
         {
             // Regression: deduplication must not collapse an NZB and a torrent that share

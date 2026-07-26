@@ -368,7 +368,13 @@ namespace NzbDrone.Core.Manga
                     ? bestResult.MagnetUrl
                     : bestResult.DownloadUrl;
 
-                var protocol = _prowlarrConnector.GetDownloadProtocol(bestResult);
+                // Use the protocol already resolved during search (route-aware - it knows which
+                // indexer endpoint this result came from) rather than re-deriving it here without
+                // that context. Re-deriving blind would fall back to matching bestResult.Indexer
+                // against local indexer definition names, which misses (and silently defaults to
+                // Torrent) whenever one local indexer definition fans out to many indexers on the
+                // Prowlarr side - sending a Usenet download's NZB URL to the torrent client.
+                var protocol = bestResult.Protocol;
 
                 var downloadResult = await _downloadService.SendToDownloadClient(
                     bestResult.Title, downloadUrl, protocol, series, volume);
