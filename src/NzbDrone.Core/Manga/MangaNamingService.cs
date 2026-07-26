@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace NzbDrone.Core.Manga
 {
@@ -64,7 +65,8 @@ namespace NzbDrone.Core.Manga
             var result = template;
 
             result = result.Replace("$Series", series.Name ?? "Unknown");
-            result = result.Replace("$Year", metadata?.Year.ToString() ?? "Unknown");
+            var year = metadata?.Year ?? 0;
+            result = result.Replace("$Year", year > 0 ? year.ToString() : string.Empty);
             result = result.Replace("$Author", metadata?.Author ?? "Unknown");
             result = result.Replace("$Publisher", metadata?.Publisher ?? "Unknown");
             result = result.Replace("$Language", chapter?.Language ?? "en");
@@ -79,6 +81,9 @@ namespace NzbDrone.Core.Manga
             {
                 result = result.Replace("$Chapter", chapter.ChapterNumber.ToString("0.###"));
             }
+
+            // Remove empty year groups left by the default templates when metadata has no year.
+            result = Regex.Replace(result, @"\s*\(\s*\)", string.Empty);
 
             return result;
         }
