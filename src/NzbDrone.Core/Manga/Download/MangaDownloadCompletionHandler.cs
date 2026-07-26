@@ -34,7 +34,8 @@ namespace NzbDrone.Core.Manga.Download
         private readonly IDiskProvider _diskProvider;
         private readonly Logger _logger;
 
-        // Track which downloads we've already processed to avoid duplicates
+        // Track which downloads we've already processed during this process lifetime.
+        // Persisted duplicate protection is handled by the MangaFile path check below.
         private readonly HashSet<string> _processedDownloads = new HashSet<string>();
         private readonly object _processedLock = new object();
 
@@ -68,39 +69,6 @@ namespace NzbDrone.Core.Manga.Download
             _diskProvider = diskProvider;
             _logger = logger;
 
-            // Seed the processed set from existing MangaFile records so we skip
-            // downloads that were already processed before a restart.
-            SeedProcessedDownloadsFromDb();
-        }
-
-        /// <summary>
-        /// Populate the in-memory processed-downloads set from the MangaFile table so
-        /// downloads completed before a restart are not reprocessed.
-        /// </summary>
-        private void SeedProcessedDownloadsFromDb()
-        {
-            try
-            {
-                var existingFiles = _mangaFileService.GetAllFiles();
-                lock (_processedLock)
-                {
-                    foreach (var file in existingFiles)
-                    {
-                        // Use the file path as the dedup key since download IDs are
-                        // transient and not stored on MangaFile records.
-                        if (!string.IsNullOrEmpty(file.Path))
-                        {
-                            _processedDownloads.Add(file.Path);
-                        }
-                    }
-                }
-
-                _logger.Debug("Seeded {0} existing manga file paths into processed-downloads set", existingFiles.Count);
-            }
-            catch (Exception ex)
-            {
-                _logger.Warn(ex, "Failed to seed processed-downloads set from database");
-            }
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -128,9 +96,11 @@ namespace NzbDrone.Core.Manga.Download
         }
 
         /// <summary>
-        /// Poll all download clients for completed manga items and process them
+        /// Poll all download clients for completed manga items and process them.
+        /// Internal (rather than private) so regression tests can drive the full completed-download
+        /// pipeline directly instead of running the BackgroundService's polling loop.
         /// </summary>
-        private async Task CheckForCompletedDownloadsAsync()
+        internal async Task CheckForCompletedDownloadsAsync()
         {
             var activeDownloads = await _downloadService.GetActiveDownloads();
 
@@ -249,13 +219,13 @@ namespace NzbDrone.Core.Manga.Download
         {
             var fileName = Path.GetFileName(filePath);
 
-            // If the file is already a CBZ, move it directly
-            // If it's raw images or an archive, CBZ-ify it
+            // If the file is already a packaged archive (CBZ/CBR/CB7/ZIP) or a PDF, move it
+            // directly. If it's raw images, CBZ-ify it.
             string finalCbzPath;
 
-            if (fileName.EndsWith(".cbz", StringComparison.OrdinalIgnoreCase))
+            if (CompletedDownloadArchive.IsPackagedArchive(fileName))
             {
-                finalCbzPath = MoveCbzToLibrary(filePath, series);
+                finalCbzPath = MoveCbzToLibrary(filePath, parseResult, series, volume);
             }
             else
             {
@@ -265,6 +235,17 @@ namespace NzbDrone.Core.Manga.Download
             if (finalCbzPath == null)
             {
                 _logger.Warn("Failed to process file: {0}", filePath);
+                return;
+            }
+
+            // Guard against duplicate MangaFile records: a restart can re-detect a "Completed"
+            // download the in-memory processed set no longer remembers (download IDs are
+            // transient and not persisted), or MoveCbzToLibrary can return an existing target
+            // path unchanged when the file was already moved. Either way, importing the same
+            // path twice must not create a second DB row for it.
+            if (_mangaFileService.GetFilesBySeries(series.Id).Any(f => f.Path == finalCbzPath))
+            {
+                _logger.Debug("MangaFile already exists for path, skipping duplicate import: {0}", finalCbzPath);
                 return;
             }
 
@@ -289,15 +270,32 @@ namespace NzbDrone.Core.Manga.Download
         }
 
         /// <summary>
-        /// Move a CBZ file to the manga library
+        /// Move an already-packaged manga archive (CBZ/CBR/CB7/ZIP/PDF) to the manga library.
         /// </summary>
-        private string MoveCbzToLibrary(string sourcePath, MangaSeries series)
+        private string MoveCbzToLibrary(
+            string sourcePath,
+            MangaTitleParseResult parseResult,
+            MangaSeries series,
+            Volume volume)
         {
             var seriesFolder = _namingService.GetSeriesFolder(series);
             var targetDir = Path.Combine(series.RootFolderPath, seriesFolder);
             _diskProvider.EnsureFolder(targetDir);
 
-            var targetPath = Path.Combine(targetDir, Path.GetFileName(sourcePath));
+            var sourceExtension = Path.GetExtension(sourcePath);
+            var fileName = parseResult.ChapterNumber.HasValue
+                ? _namingService.GetChapterFileName(
+                    series,
+                    volume,
+                    new Chapter
+                    {
+                        ChapterNumber = parseResult.ChapterNumber.Value,
+                        Language = "en"
+                    })
+                : _namingService.GetVolumeFileName(series, volume);
+            fileName = Path.ChangeExtension(fileName, sourceExtension);
+            fileName = CompletedDownloadArchive.NormalizeFileName(fileName);
+            var targetPath = Path.Combine(targetDir, fileName);
 
             if (_diskProvider.FileExists(targetPath))
             {
@@ -308,12 +306,12 @@ namespace NzbDrone.Core.Manga.Download
             try
             {
                 _diskProvider.MoveFile(sourcePath, targetPath);
-                _logger.Info("Moved CBZ to library: {0}", targetPath);
+                _logger.Info("Moved manga archive to library: {0}", targetPath);
                 return targetPath;
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "Failed to move CBZ from {0} to {1}", sourcePath, targetPath);
+                _logger.Error(ex, "Failed to move manga archive from {0} to {1}", sourcePath, targetPath);
                 return null;
             }
         }
@@ -399,10 +397,7 @@ namespace NzbDrone.Core.Manga.Download
         /// </summary>
         private List<string> FindDownloadedFiles(string outputPath)
         {
-            var mangaExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ".cbz", ".cbr", ".cb7", ".pdf"
-            };
+            var mangaExtensions = CompletedDownloadArchive.PackagedExtensions;
 
             var imageExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
@@ -444,6 +439,12 @@ namespace NzbDrone.Core.Manga.Download
         /// cause a completed download to silently go unmatched. Falls back to the immutable
         /// ForeignMangaId only when the parsed download data actually carried one - it is never
         /// fabricated here.
+        ///
+        /// MangaSeries.CleanName is only backfilled for older rows by a periodic housekeeper
+        /// (up to 24h after upgrade/restart), so a series added before that column existed can
+        /// still have it null/empty here. Recompute the clean name from the series' current Name
+        /// on the fly in that case instead of excluding the series from matching entirely - the
+        /// importer must not depend on housekeeping timing to find an existing series.
         /// </summary>
         private MangaSeries FindMatchingSeries(MangaTitleParseResult parseResult)
         {
@@ -451,8 +452,36 @@ namespace NzbDrone.Core.Manga.Download
 
             var allSeries = _seriesService.GetAllSeries();
 
-            var match = allSeries.FirstOrDefault(s => !string.IsNullOrEmpty(s.CleanName) &&
-                                                        s.CleanName.CleanAuthorName().Equals(cleanSeriesTitle, StringComparison.OrdinalIgnoreCase));
+            var seriesCleanNames = allSeries
+                .Select(s => new
+                {
+                    Series = s,
+                    CleanName = string.IsNullOrEmpty(s.CleanName)
+                        ? (s.Name ?? string.Empty).CleanAuthorName()
+                        : s.CleanName.CleanAuthorName()
+                })
+                .Where(x => !string.IsNullOrEmpty(x.CleanName))
+                .ToList();
+
+            var match = seriesCleanNames
+                .FirstOrDefault(x => x.CleanName.Equals(cleanSeriesTitle, StringComparison.OrdinalIgnoreCase))
+                ?.Series;
+
+            if (match != null)
+            {
+                return match;
+            }
+
+            // Release titles commonly include a publisher or release-group prefix, e.g.
+            // "Yen.Press-Solo.Leveling". Match the longest library series whose normalized
+            // name is present in the normalized raw release title before using the immutable ID
+            // fallback. This keeps the match deterministic without guessing a series record.
+            var cleanReleaseTitle = (parseResult.RawTitle ?? string.Empty).CleanAuthorName();
+            match = seriesCleanNames
+                .Where(x => cleanReleaseTitle.IndexOf(x.CleanName, StringComparison.OrdinalIgnoreCase) >= 0)
+                .OrderByDescending(x => x.CleanName.Length)
+                .Select(x => x.Series)
+                .FirstOrDefault();
 
             if (match != null)
             {
