@@ -1,3 +1,4 @@
+using System;
 using System.Net;
 using System.Threading.Tasks;
 using NLog;
@@ -44,7 +45,9 @@ namespace NzbDrone.Core.Download
 
             try
             {
-                var request = indexer?.GetDownloadRequest(url) ?? new HttpRequest(url);
+                var normalizedUrl = NormalizeUsenetDownloadUrl(url);
+                var request = indexer?.GetDownloadRequest(normalizedUrl) ?? new HttpRequest(normalizedUrl);
+                request.AllowAutoRedirect = true;
                 request.RateLimitKey = remoteBook?.Release?.IndexerId.ToString();
 
                 var response = await RetryStrategy
@@ -85,6 +88,39 @@ namespace NzbDrone.Core.Download
 
             _logger.Info("Adding report [{0}] to the queue.", remoteBook.Release.Title);
             return AddFromNzbFile(remoteBook, filename, nzbData);
+        }
+
+        internal static string NormalizeUsenetDownloadUrl(string url)
+        {
+            if (string.IsNullOrEmpty(url)) return url;
+
+            Uri result;
+            try
+            {
+                // Try to parse to handle URL encoding
+                result = new Uri(url);
+            }
+            catch
+            {
+                // Fallback to simple string replacement if Uri parsing fails
+                return url.Replace("http://api.nzbgeek.info", "https://api.nzbgeek.info");
+            }
+
+            if (result.Scheme == Uri.UriSchemeHttps)
+            {
+                return url; // Already HTTPS, nothing to do
+            }
+
+            if (result.Host.Equals("api.nzbgeek.info", StringComparison.OrdinalIgnoreCase) && result.Scheme == Uri.UriSchemeHttp)
+            {
+                // Rebuild the URL with HTTPS scheme
+                var httpsUrl = result.ToString()
+                    .Replace("http://api.nzbgeek.info", "https://api.nzbgeek.info", StringComparison.OrdinalIgnoreCase);
+
+                return httpsUrl;
+            }
+
+            return url; // Not a NZBgeek HTTP URL, return as-is
         }
     }
 }

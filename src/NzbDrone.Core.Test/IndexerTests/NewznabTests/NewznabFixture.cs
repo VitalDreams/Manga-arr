@@ -7,6 +7,7 @@ using FluentAssertions;
 using Moq;
 using NUnit.Framework;
 using NzbDrone.Common.Http;
+using NzbDrone.Core.Download;
 using NzbDrone.Core.Indexers;
 using NzbDrone.Core.Indexers.Newznab;
 using NzbDrone.Core.Test.Framework;
@@ -105,6 +106,15 @@ namespace NzbDrone.Core.Test.IndexerTests.NewznabTests
                   .Verify(v => v.RecordFailure(It.IsAny<int>(), TimeSpan.FromMinutes(5.0)), Times.Once());
 
             ExceptionVerification.ExpectedWarns(1);
+        }
+
+        [Test]
+        public void should_redirect_nzbgeek_http_urls_to_https()
+        {
+            var url = "http://api.nzbgeek.info/api?t=get&id=abc123&apikey=secret";
+
+            UsenetClientBase<NewznabSettings>.NormalizeUsenetDownloadUrl(url)
+                .Should().Be("https://api.nzbgeek.info/api?t=get&id=abc123&apikey=secret");
         }
     }
 }
