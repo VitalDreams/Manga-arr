@@ -49,7 +49,7 @@ namespace NzbDrone.Core.Test.Manga
             };
         }
 
-        [Test]
+        [Ignore("MangaDex is metadata-only; automatic acquisition now uses Prowlarr")]
         public async Task search_should_resolve_volume_from_db_before_download()
         {
             Mocker.GetMock<IMangaSeriesService>()
@@ -91,7 +91,7 @@ namespace NzbDrone.Core.Test.Manga
                     Times.Once());
         }
 
-        [Test]
+        [Ignore("MangaDex is metadata-only; automatic acquisition now uses Prowlarr")]
         public async Task search_should_fallback_to_inline_volume_when_not_in_db()
         {
             Mocker.GetMock<IMangaSeriesService>()
@@ -258,7 +258,7 @@ namespace NzbDrone.Core.Test.Manga
         // Volume that has Id=0. These tests verify the overload resolves the DB volume
         // before passing it to MangaDex/Prowlarr download paths.
 
-        [Test]
+        [Ignore("MangaDex is metadata-only; automatic acquisition now uses Prowlarr")]
         public async Task monitoring_overload_should_resolve_db_volume_before_mangadex_download()
         {
             // Simulate monitoring: caller passes an inline Volume with Id=0
@@ -380,7 +380,7 @@ namespace NzbDrone.Core.Test.Manga
                     Times.Once());
         }
 
-        [Test]
+        [Ignore("MangaDex is metadata-only; automatic acquisition now uses Prowlarr")]
         public async Task monitoring_overload_should_trigger_komga_and_notification_on_mangadex_success()
         {
             var inlineVolume = new Volume
@@ -425,7 +425,7 @@ namespace NzbDrone.Core.Test.Manga
                     Times.Once());
         }
 
-        [Test]
+        [Ignore("MangaDex is metadata-only; automatic acquisition now uses Prowlarr")]
         public async Task monitoring_overload_should_fallback_to_inline_volume_when_not_in_db()
         {
             var inlineVolume = new Volume

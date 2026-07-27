@@ -133,7 +133,7 @@ namespace NzbDrone.Core.Test.Manga
         }
 
         [Test]
-        public async Task startup_reconciliation_should_not_block_monitoring_on_error()
+        public void startup_reconciliation_should_not_block_monitoring_on_error()
         {
             // Arrange: reconciliation throws for one series, but monitoring still starts
             Mocker.GetMock<IMangaSeriesService>()

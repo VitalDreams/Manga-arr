@@ -71,103 +71,35 @@ namespace NzbDrone.Core.Manga
 
             try
             {
-                // Step 2: Search MangaDex for available chapters/volumes
-                var volumeChapterMap = await _mangaDexConnector.GetVolumeChapterMapAsync(series.ForeignMangaId);
+                // Prowlarr is the only automatic acquisition path. MangaDex is metadata-only
+                // here and must never be used as an implicit download fallback.
+                var volumesToDownload = volumeNumber.HasValue
+                    ? new List<int> { volumeNumber.Value }
+                    : await GetWantedVolumesAsync(series);
 
-                if (volumeChapterMap?.VolumeChapters != null && volumeChapterMap.VolumeChapters.Any())
+                foreach (var volNum in volumesToDownload)
                 {
-                    var volumesToDownload = volumeNumber.HasValue
-                        ? new List<int> { volumeNumber.Value }
-                        : volumeChapterMap.VolumeChapters.Keys.OrderBy(v => v).ToList();
+                    var volume = _volumeRepository.FindBySeriesAndVolumeNumber(seriesId, volNum)
+                        ?? new Volume
+                        {
+                            VolumeNumber = volNum,
+                            Title = $"{series.Name} Vol. {volNum:000}"
+                        };
 
-                    foreach (var volNum in volumesToDownload)
+                    _logger.Info("Searching Prowlarr first for volume {0}", volNum);
+                    var prowlarrResult = await TryProwlarrFallbackAsync(series, volume, volNum);
+                    if (prowlarrResult != null)
                     {
-                        if (!volumeChapterMap.VolumeChapters.ContainsKey(volNum))
-                        {
-                            _logger.Warn("Volume {0} not found on MangaDex for {1}", volNum, series.Name);
-                            result.FailedVolumes.Add(new FailedVolumeResult
-                            {
-                                VolumeNumber = volNum,
-                                ErrorMessage = $"Volume {volNum} not found on MangaDex",
-                                Source = "MangaDex"
-                            });
-                            continue;
-                        }
-
-                        var volume = _volumeRepository.FindBySeriesAndVolumeNumber(seriesId, volNum)
-                            ?? new Volume
-                            {
-                                VolumeNumber = volNum,
-                                Title = $"{series.Name} Vol. {volNum:000}"
-                            };
-
-                        // Step 4: Use MangaDexDownloader to download directly
-                        _logger.Info("Downloading volume {0} from MangaDex...", volNum);
-                        var downloadPath = await _mangaDexDownloader.DownloadVolumeAsync(
-                            series.RootFolderPath ?? series.Path, series, volume);
-
-                        if (downloadPath != null)
-                        {
-                            _logger.Info("Successfully downloaded volume {0} to {1}", volNum, downloadPath);
-                            result.DownloadedVolumes.Add(new DownloadedVolumeResult
-                            {
-                                VolumeNumber = volNum,
-                                FilePath = downloadPath,
-                                Source = "MangaDex"
-                            });
-                        }
-                        else
-                        {
-                            _logger.Warn("MangaDex download failed for volume {0}, trying Prowlarr fallback...", volNum);
-                            var prowlarrResult = await TryProwlarrFallbackAsync(series, volume, volNum);
-                            if (prowlarrResult != null)
-                            {
-                                result.DownloadedVolumes.Add(prowlarrResult);
-                            }
-                            else
-                            {
-                                result.FailedVolumes.Add(new FailedVolumeResult
-                                {
-                                    VolumeNumber = volNum,
-                                    ErrorMessage = "Both MangaDex and Prowlarr failed",
-                                    Source = "Both"
-                                });
-                            }
-                        }
+                        result.DownloadedVolumes.Add(prowlarrResult);
                     }
-                }
-                else
-                {
-                    // Step 3: MangaDex has no chapters - search Prowlarr as fallback
-                    _logger.Info("No MangaDex chapters found for {0}, trying Prowlarr...", series.Name);
-
-                    var volumesToDownload = volumeNumber.HasValue
-                        ? new List<int> { volumeNumber.Value }
-                        : await GetWantedVolumesAsync(series);
-
-                    foreach (var volNum in volumesToDownload)
+                    else
                     {
-                        var volume = _volumeRepository.FindBySeriesAndVolumeNumber(seriesId, volNum)
-                            ?? new Volume
-                            {
-                                VolumeNumber = volNum,
-                                Title = $"{series.Name} Vol. {volNum:000}"
-                            };
-
-                        var prowlarrResult = await TryProwlarrFallbackAsync(series, volume, volNum);
-                        if (prowlarrResult != null)
+                        result.FailedVolumes.Add(new FailedVolumeResult
                         {
-                            result.DownloadedVolumes.Add(prowlarrResult);
-                        }
-                        else
-                        {
-                            result.FailedVolumes.Add(new FailedVolumeResult
-                            {
-                                VolumeNumber = volNum,
-                                ErrorMessage = "No results found on Prowlarr",
-                                Source = "Prowlarr"
-                            });
-                        }
+                            VolumeNumber = volNum,
+                            ErrorMessage = "No results found on Prowlarr; MangaDex fallback is disabled",
+                            Source = "Prowlarr"
+                        });
                     }
                 }
 
@@ -242,52 +174,27 @@ namespace NzbDrone.Core.Manga
 
             try
             {
-                // Try MangaDex first
-                var volumeChapterMap = await _mangaDexConnector.GetVolumeChapterMapAsync(series.ForeignMangaId);
+                // Prowlarr is the only automatic acquisition path. MangaDex is last-resort
+                // manual tooling and is intentionally not called from monitored searches.
+                _logger.Info("Searching Prowlarr first for volume {0}; MangaDex fallback disabled", resolvedVolume.VolumeNumber);
+                var prowlarrResult = await TryProwlarrFallbackAsync(series, resolvedVolume, resolvedVolume.VolumeNumber);
 
-                if (volumeChapterMap?.VolumeChapters != null &&
-                    volumeChapterMap.VolumeChapters.ContainsKey(resolvedVolume.VolumeNumber))
+                if (prowlarrResult != null)
                 {
-                    _logger.Info("Downloading volume {0} from MangaDex...", resolvedVolume.VolumeNumber);
-                    var downloadPath = await _mangaDexDownloader.DownloadVolumeAsync(
-                        series.RootFolderPath ?? series.Path, series, resolvedVolume);
-
-                    if (downloadPath != null)
+                    result.DownloadedVolumes.Add(prowlarrResult);
+                    result.Success = true;
+                }
+                else
+                {
+                    result.FailedVolumes.Add(new FailedVolumeResult
                     {
-                        result.DownloadedVolumes.Add(new DownloadedVolumeResult
-                        {
-                            VolumeNumber = resolvedVolume.VolumeNumber,
-                            FilePath = downloadPath,
-                            Source = "MangaDex"
-                        });
-                        result.Success = true;
-                        result.TotalVolumesSearched = 1;
-                    }
+                        VolumeNumber = resolvedVolume.VolumeNumber,
+                        ErrorMessage = "No results found on Prowlarr; MangaDex fallback is disabled",
+                        Source = "Prowlarr"
+                    });
                 }
 
-                if (!result.DownloadedVolumes.Any())
-                {
-                    // Fallback to Prowlarr
-                    _logger.Info("MangaDex unavailable for volume {0}, trying Prowlarr...", resolvedVolume.VolumeNumber);
-                    var prowlarrResult = await TryProwlarrFallbackAsync(series, resolvedVolume, resolvedVolume.VolumeNumber);
-
-                    if (prowlarrResult != null)
-                    {
-                        result.DownloadedVolumes.Add(prowlarrResult);
-                        result.Success = true;
-                    }
-                    else
-                    {
-                        result.FailedVolumes.Add(new FailedVolumeResult
-                        {
-                            VolumeNumber = resolvedVolume.VolumeNumber,
-                            ErrorMessage = "Both MangaDex and Prowlarr failed",
-                            Source = "Both"
-                        });
-                    }
-
-                    result.TotalVolumesSearched = 1;
-                }
+                result.TotalVolumesSearched = 1;
 
                 // Komga scan + notification (both MangaDex and Prowlarr paths)
                 if (result.DownloadedVolumes.Any())

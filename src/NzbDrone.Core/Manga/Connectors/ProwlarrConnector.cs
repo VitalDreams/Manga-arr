@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 using NLog;
 using NzbDrone.Common.Http;
 using NzbDrone.Core.Indexers;
@@ -36,6 +37,7 @@ namespace NzbDrone.Core.Manga.Connectors
         private string _apiKey;
         private Dictionary<string, DownloadProtocol> _indexerProtocols;
         private Dictionary<string, string> _indexerIds;
+        private Dictionary<string, string> _indexerBaseUrls;
         private bool _initialized;
 
         public bool IsConfigured
@@ -68,6 +70,7 @@ namespace NzbDrone.Core.Manga.Connectors
                 var definitions = _indexerFactory.All();
                 var protocols = new Dictionary<string, DownloadProtocol>(StringComparer.OrdinalIgnoreCase);
                 var indexerIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                var indexerBaseUrls = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 string serverUrl = null;
                 string apiKey = null;
 
@@ -108,6 +111,7 @@ namespace NzbDrone.Core.Manga.Connectors
                     {
                         protocols[definition.Name] = protocol;
                         indexerIds[definition.Name] = ExtractProwlarrIndexerId(settings.BaseUrl, definition.Id);
+                        indexerBaseUrls[definition.Name] = settings.BaseUrl.TrimEnd('/');
                     }
                 }
 
@@ -117,6 +121,7 @@ namespace NzbDrone.Core.Manga.Connectors
                     _apiKey = apiKey;
                     _indexerProtocols = protocols;
                     _indexerIds = indexerIds;
+                    _indexerBaseUrls = indexerBaseUrls;
                     _logger.Info("Prowlarr connector configured from {0} indexer definition(s), server: {1}", protocols.Count, _serverUrl);
                 }
                 else
@@ -185,15 +190,25 @@ namespace NzbDrone.Core.Manga.Connectors
                 {
                     try
                     {
-                        var indexerId = _indexerIds.TryGetValue(route.Key, out var configuredId) ? configuredId : route.Key;
-                        var url = $"{_serverUrl}/api/v1/search?query={Uri.EscapeDataString(query)}&categories=7030&categories=7000&indexer={Uri.EscapeDataString(indexerId)}&limit=25";
+                        var indexerId = _indexerIds != null && _indexerIds.TryGetValue(route.Key, out var configuredId) ? configuredId : route.Key;
+                        var baseUrl = _indexerBaseUrls != null && _indexerBaseUrls.TryGetValue(route.Key, out var configuredBaseUrl)
+                            ? configuredBaseUrl
+                            : _serverUrl;
+                        var hasNewznabRoute = route.Value == DownloadProtocol.Usenet &&
+                                              !string.IsNullOrWhiteSpace(baseUrl) &&
+                                              Regex.IsMatch(baseUrl, @"/\d+/?$", RegexOptions.CultureInvariant);
+                        var url = hasNewznabRoute
+                            ? $"{baseUrl.TrimEnd('/')}/api?apikey={Uri.EscapeDataString(_apiKey)}&t=search&q={Uri.EscapeDataString(query)}&cat=7000,7030&indexer={Uri.EscapeDataString(indexerId)}&o=json"
+                            : $"{_serverUrl}/api/v1/search?query={Uri.EscapeDataString(query)}&categories=7030&categories=7000&indexer={Uri.EscapeDataString(indexerId)}&limit=25";
 
                         var request = new HttpRequestBuilder(url)
                             .SetHeader("X-Api-Key", _apiKey)
                             .Build();
 
                         var response = await _httpClient.GetAsync(request);
-                        var results = ParseSearchResults(response.Content);
+                        var results = hasNewznabRoute
+                            ? ParseNewznabOrJsonSearchResults(response.Content)
+                            : ParseSearchResults(response.Content);
 
                         foreach (var r in results)
                         {
@@ -571,6 +586,73 @@ namespace NzbDrone.Core.Manga.Connectors
                    lowerTitle.Contains("cbr") ||
                    lowerTitle.Contains("graphic novel") ||
                    Regex.IsMatch(lowerTitle, @"\bv\d+\b");
+        }
+
+        private List<ProwlarrSearchResult> ParseNewznabSearchResults(string xml)
+        {
+            var results = new List<ProwlarrSearchResult>();
+
+            try
+            {
+                var document = XDocument.Parse(xml);
+                XNamespace newznab = "http://www.newznab.com/DTD/2010/feeds/attributes/";
+
+                foreach (var item in document.Descendants("item"))
+                {
+                    var attributes = item.Elements(newznab + "attr")
+                        .Where(e => e.Attribute("name") != null)
+                        .GroupBy(e => e.Attribute("name").Value, StringComparer.OrdinalIgnoreCase)
+                        .ToDictionary(g => g.Key, g => g.First().Attribute("value")?.Value ?? "", StringComparer.OrdinalIgnoreCase);
+                    var enclosure = item.Element("enclosure");
+                    var link = item.Element("link")?.Value ?? enclosure?.Attribute("url")?.Value;
+                    var size = 0L;
+
+                    if (attributes.TryGetValue("size", out var sizeText))
+                    {
+                        long.TryParse(sizeText, out size);
+                    }
+
+                    if (size == 0 && enclosure != null)
+                    {
+                        long.TryParse(enclosure.Attribute("length")?.Value, out size);
+                    }
+
+                    results.Add(new ProwlarrSearchResult
+                    {
+                        Id = item.Element("guid")?.Value,
+                        Title = item.Element("title")?.Value,
+                        Size = size,
+                        DownloadUrl = link,
+                        InfoUrl = item.Element("comments")?.Value,
+                        Indexer = item.Element("prowlarrindexer")?.Value,
+                        Categories = attributes.TryGetValue("category", out var category)
+                            ? new List<string> { category }
+                            : new List<string>(),
+                        PublishDate = DateTime.TryParse(item.Element("pubDate")?.Value, out var publishDate)
+                            ? publishDate
+                            : default
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn("Failed to parse Newznab results: {0}", ex.Message);
+            }
+
+            return results;
+        }
+
+        private List<ProwlarrSearchResult> ParseNewznabOrJsonSearchResults(string content)
+        {
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                return new List<ProwlarrSearchResult>();
+            }
+
+            var trimmed = content.TrimStart();
+            return trimmed.StartsWith("<", StringComparison.Ordinal)
+                ? ParseNewznabSearchResults(content)
+                : ParseSearchResults(content);
         }
 
         private List<ProwlarrSearchResult> ParseSearchResults(string json)

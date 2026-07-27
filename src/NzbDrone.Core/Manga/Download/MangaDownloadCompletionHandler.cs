@@ -196,16 +196,97 @@ namespace NzbDrone.Core.Manga.Download
 
             _logger.Info("Found {0} manga files in download", downloadedFiles.Count);
 
-            // Process each file: move to library and update DB
-            foreach (var filePath in downloadedFiles)
+            // Full-volume replacements are staged, not deleted. The existing edition is
+            // preserved until the new file has been moved and registered successfully.
+            var stagedFiles = !parseResult.ChapterNumber.HasValue
+                ? StageExistingVolumeFiles(volume)
+                : new List<StagedMangaFile>();
+
+            try
             {
-                await ProcessDownloadedFileAsync(filePath, parseResult, series, volume);
+                foreach (var filePath in downloadedFiles)
+                {
+                    await ProcessDownloadedFileAsync(filePath, parseResult, series, volume);
+                }
+
+                foreach (var stagedFile in stagedFiles)
+                {
+                    _mangaFileService.Delete(stagedFile.File.Id);
+
+                    if (_diskProvider.FileExists(stagedFile.BackupPath))
+                    {
+                        _diskProvider.DeleteFile(stagedFile.BackupPath);
+                    }
+                }
+
+                await _komga.TriggerLibraryScanAsync();
+                _logger.Info("Completed processing manga download: {0}", download.Title);
+            }
+            catch
+            {
+                var stagedPaths = new HashSet<string>(stagedFiles.Select(f => f.Path), StringComparer.OrdinalIgnoreCase);
+
+                // Remove any replacement records/files created before a later file failed.
+                foreach (var replacementFile in _mangaFileService.GetFilesByVolume(volume.Id)
+                    .Where(f => !stagedPaths.Contains(f.Path)).ToList())
+                {
+                    if (_diskProvider.FileExists(replacementFile.Path))
+                    {
+                        _diskProvider.DeleteFile(replacementFile.Path);
+                    }
+
+                    _mangaFileService.Delete(replacementFile.Id);
+                }
+
+                foreach (var stagedFile in stagedFiles)
+                {
+                    try
+                    {
+                        if (_diskProvider.FileExists(stagedFile.Path))
+                        {
+                            _diskProvider.DeleteFile(stagedFile.Path);
+                        }
+
+                        if (_diskProvider.FileExists(stagedFile.BackupPath))
+                        {
+                            _diskProvider.MoveFile(stagedFile.BackupPath, stagedFile.Path);
+                        }
+
+                        _logger.Warn("Restored previous edition after failed replacement: {0}", stagedFile.Path);
+                    }
+                    catch (Exception restoreException)
+                    {
+                        _logger.Error(restoreException, "Failed to restore previous edition: {0}", stagedFile.Path);
+                    }
+                }
+
+                throw;
+            }
+        }
+
+        private List<StagedMangaFile> StageExistingVolumeFiles(Volume volume)
+        {
+            var stagedFiles = new List<StagedMangaFile>();
+
+            foreach (var existingFile in _mangaFileService.GetFilesByVolume(volume.Id))
+            {
+                var backupPath = existingFile.Path + ".mangaarr-replacement-backup-" + Guid.NewGuid().ToString("N");
+
+                if (_diskProvider.FileExists(existingFile.Path))
+                {
+                    _diskProvider.MoveFile(existingFile.Path, backupPath);
+                }
+
+                stagedFiles.Add(new StagedMangaFile
+                {
+                    File = existingFile,
+                    Path = existingFile.Path,
+                    BackupPath = backupPath
+                });
+                _logger.Info("Staged previous edition for volume {0}: {1}", volume.VolumeNumber, existingFile.Path);
             }
 
-            // Trigger Komga library scan
-            await _komga.TriggerLibraryScanAsync();
-
-            _logger.Info("Completed processing manga download: {0}", download.Title);
+            return stagedFiles;
         }
 
         /// <summary>
@@ -592,6 +673,13 @@ namespace NzbDrone.Core.Manga.Download
 
             return result;
         }
+    }
+
+    internal sealed class StagedMangaFile
+    {
+        public MangaFile File { get; set; }
+        public string Path { get; set; }
+        public string BackupPath { get; set; }
     }
 
     /// <summary>

@@ -529,26 +529,26 @@ namespace Readarr.Api.V1.Manga
             }
         }
 
-        // Resolves the manga series for the search endpoints. Native MangaSeries IDs are
-        // canonical and are tried first so this never touches AuthorService for them. Legacy
-        // Author IDs (from before native manga IDs existed) are supported as a fallback only.
+        // Resolves the manga series for the search endpoints. Legacy Author IDs are
+        // preferred when they resolve to a manga-backed author. Native MangaSeries IDs
+        // remain supported as a fallback, but must not win over an author ID collision.
         private MangaSeries ResolveMangaSeriesForSearch(int id)
         {
-            var series = _mangaSeriesRepository.Find(id);
-            if (series != null)
-            {
-                return series;
-            }
-
             try
             {
                 var author = _authorService.GetAuthor(id);
-                return ResolveMangaSeries(author);
+                var authorSeries = ResolveMangaSeries(author);
+                if (authorSeries != null)
+                {
+                    return authorSeries;
+                }
             }
             catch (ModelNotFoundException)
             {
-                return null;
+                // No legacy author. Continue with the native MangaSeries ID.
             }
+
+            return _mangaSeriesRepository.Find(id);
         }
 
         private MangaSeries ResolveMangaSeries(NzbDrone.Core.Books.Author author)

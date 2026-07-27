@@ -181,39 +181,44 @@ namespace NzbDrone.Core.Manga.Monitoring
             var existingVolumes = _volumeRepository.All()
                 .Where(v => v.MangaSeriesId == series.Id)
                 .ToList();
-            var existingVolumeNumbers = existingVolumes.Select(v => v.VolumeNumber).ToHashSet();
-
-            // Skip volumes that already have downloaded files
-            var downloadedVolumeNumbers = existingVolumes
-                .Where(v => _mangaFileService.GetFilesByVolume(v.Id).Any())
+            // Monitored volumes already in the database remain wanted until they
+            // have a native MangaFile. New remote volumes are wanted as well.
+            var wantedExistingVolumeNumbers = existingVolumes
+                .Where(v => v.Monitored && !_mangaFileService.GetFilesByVolume(v.Id).Any())
                 .Select(v => v.VolumeNumber)
                 .ToHashSet();
-
+            var existingVolumeNumbers = existingVolumes.Select(v => v.VolumeNumber).ToHashSet();
             var newVolumeNumbers = remoteVolumeNumbers
-                .Where(v => !existingVolumeNumbers.Contains(v) && !downloadedVolumeNumbers.Contains(v))
+                .Where(v => !existingVolumeNumbers.Contains(v))
+                .ToHashSet();
+            var volumesToSearch = wantedExistingVolumeNumbers
+                .Union(newVolumeNumbers)
                 .OrderBy(v => v)
                 .ToList();
 
-            result.NewVolumes = newVolumeNumbers.Count;
+            result.NewVolumes = volumesToSearch.Count;
 
-            if (!newVolumeNumbers.Any())
+            if (!volumesToSearch.Any())
             {
                 _logger.Debug("No new volumes for {0} (latest on MangaDex: {1})", series.Name, remoteVolumeNumbers.Max());
                 return result;
             }
 
             _logger.Info("Found {0} new volume(s) for {1}: {2}",
-                newVolumeNumbers.Count, series.Name, string.Join(", ", newVolumeNumbers));
+                volumesToSearch.Count, series.Name, string.Join(", ", volumesToSearch));
 
-            foreach (var volumeNumber in newVolumeNumbers)
+            foreach (var volumeNumber in volumesToSearch)
             {
                 try
                 {
-                    var volume = new Volume
-                    {
-                        VolumeNumber = volumeNumber,
-                        Title = $"{series.Name} Vol. {volumeNumber:000}"
-                    };
+                    // Preserve the persisted row so imports retain its canonical VolumeId.
+                    var volume = existingVolumes.FirstOrDefault(v => v.VolumeNumber == volumeNumber)
+                        ?? new Volume
+                        {
+                            VolumeNumber = volumeNumber,
+                            Title = $"{series.Name} Vol. {volumeNumber:000}",
+                            Monitored = true
+                        };
 
                     var searchResult = await _searchService.SearchAndDownloadAsync(series, volume);
 
