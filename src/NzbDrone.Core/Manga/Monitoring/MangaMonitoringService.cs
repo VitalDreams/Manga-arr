@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -171,16 +172,16 @@ namespace NzbDrone.Core.Manga.Monitoring
 
             var volumeChapterMap = await _metadataAggregator.GetVolumeChapterMapAsync(foreignMangaId);
 
-            if (volumeChapterMap?.VolumeChapters == null || !volumeChapterMap.VolumeChapters.Any())
-            {
-                _logger.Debug("No volumes found on MangaDex for {0}", series.Name);
-                return result;
-            }
-
-            var remoteVolumeNumbers = volumeChapterMap.VolumeChapters.Keys.OrderBy(v => v).ToList();
+            var remoteVolumeNumbers = volumeChapterMap?.VolumeChapters?.Keys.OrderBy(v => v).ToList()
+                ?? new List<int>();
             var existingVolumes = _volumeRepository.All()
                 .Where(v => v.MangaSeriesId == series.Id)
                 .ToList();
+
+            if (!remoteVolumeNumbers.Any())
+            {
+                _logger.Debug("No volumes found on MangaDex for {0}; checking monitored missing volumes", series.Name);
+            }
             // Monitored volumes already in the database remain wanted until they
             // have a native MangaFile. New remote volumes are wanted as well.
             var wantedExistingVolumeNumbers = existingVolumes
@@ -196,7 +197,7 @@ namespace NzbDrone.Core.Manga.Monitoring
                 .OrderBy(v => v)
                 .ToList();
 
-            result.NewVolumes = volumesToSearch.Count;
+            result.NewVolumes = volumesToSearch.Count();
 
             if (!volumesToSearch.Any())
             {
